@@ -1,0 +1,53 @@
+{
+    "manifest_version": 3,
+    "name": "FocusOverlay",
+    "version": "1.0.0",
+    "action": {
+        "default_popup": "index.html"
+    },
+    "background": {
+        "service_worker": "src/background/index.ts",
+        "type": "module"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "*://*.youtube.com/*"
+            ],
+            "js": [
+                "src/content/youtube/index.tsx"
+            ],
+            "run_at": "document_end"
+        },
+        {
+            "matches": [
+                "*://*.instagram.com/*"
+            ],
+            "js": [
+                "src/content/instagram/index.tsx"
+            ],
+            "run_at": "document_end"
+        },
+        {
+            "matches": [
+                "*://*.twitter.com/*",
+                "*://*.x.com/*"
+            ],
+            "js": [
+                "src/content/twitter/index.tsx"
+            ],
+            "run_at": "document_end"
+        }
+    ],
+    "permissions": [
+        "storage",
+        "tabs",
+        "scripting"
+    ],
+    "host_permissions": [
+        "*://*.youtube.com/*",
+        "*://*.instagram.com/*",
+        "*://*.twitter.com/*",
+        "*://*.x.com/*"
+    ]
+}
