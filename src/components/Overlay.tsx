@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Timer, AlertTriangle } from 'lucide-react';
-import { StorageService } from '../storage';
+import { Timer } from 'lucide-react';
+import { getLimitState } from '../content/limitGuard';
 import { AppSettings, Platform } from '../types';
-import { BlockScreen } from './BlockScreen';
+import { StorageService } from '../storage';
 
 interface OverlayProps {
     platform?: Platform;
@@ -10,110 +10,106 @@ interface OverlayProps {
 
 export const Overlay = ({ platform = 'youtube' }: OverlayProps) => {
     const [time, setTime] = useState(0);
+    const [sessionSeconds, setSessionSeconds] = useState(0);
     const [settings, setSettings] = useState<AppSettings | null>(null);
-    const [isExpanded, setIsExpanded] = useState(true);
-    const [overrideUntil, setOverrideUntil] = useState(0);
+    const [effectiveDaily, setEffectiveDaily] = useState(0);
+    const [progress, setProgress] = useState<number | null>(null);
 
     useEffect(() => {
-        let localTime = time;
+        let localTime = 0;
 
-        const fetchData = async () => {
+        const refresh = async () => {
             const usage = await StorageService.getTodayUsage();
             const currentSettings = await StorageService.getSettings();
-
-            // Sync with storage, but don't overwrite if local is slightly ahead due to tick
-            // Actually, storage is source of truth, but it lags. 
-            // We set base time from storage, then animate on top.
             const storedTime = usage.byPlatform[platform] || 0;
+
             if (Math.abs(storedTime - localTime) > 5) {
-                // Only sync if drift is > 5s (background flush rate)
                 setTime(storedTime);
                 localTime = storedTime;
             }
-
-            setVideoCount(usage.videoCounts?.[platform] || 0);
             setSettings(currentSettings);
+
+            const host = document.getElementById('focus-overlay-host');
+            const session = parseInt(host?.dataset.sessionSeconds || '0', 10);
+            setSessionSeconds(session);
+
+            const state = await getLimitState(platform, session);
+            setEffectiveDaily(state.effectiveDailyLimit);
+            if (state.effectiveDailyLimit > 0) {
+                setProgress(
+                    Math.min(100, Math.round((state.dailyUsage / state.effectiveDailyLimit) * 100))
+                );
+            } else {
+                setProgress(null);
+            }
         };
 
         const tick = () => {
-            // Check if content script detected activity
             const host = document.getElementById('focus-overlay-host');
             const isActive = host?.dataset.isActive === 'true';
+            const session = parseInt(host?.dataset.sessionSeconds || '0', 10);
+            setSessionSeconds(session);
 
             if (isActive) {
-                setTime(t => {
+                setTime((t) => {
                     localTime = t + 1;
                     return t + 1;
                 });
             }
         };
 
-        fetchData();
-        const fetchInterval = setInterval(fetchData, 2000); // Sync every 2s
-        const tickInterval = setInterval(tick, 1000); // Animate every 1s
+        refresh();
+        const fetchInterval = setInterval(refresh, 2000);
+        const tickInterval = setInterval(tick, 1000);
 
         return () => {
             clearInterval(fetchInterval);
             clearInterval(tickInterval);
         };
-    }, []);
+    }, [platform]);
 
-    const [videoCount, setVideoCount] = useState(0);
+    if (!settings) return null;
+
+    const sessionLimit = settings.sessionLimits[platform] || 0;
 
     const formatTime = (seconds: number) => {
-        const h = Math.floor(seconds / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
+        const m = Math.floor(seconds / 60);
         const s = seconds % 60;
-        return `${h > 0 ? h + 'h ' : ''}${m}m ${s}s`;
+        return `${m}:${s.toString().padStart(2, '0')}`;
     };
-
-    const limit = settings?.limits[platform] || 0;
-    // Check if blocked: limit exists, usage exceeds limit, and not in override period
-    const isBlocked = limit > 0 && time >= limit && Date.now() > overrideUntil;
-
-    const handleOverride = () => {
-        setOverrideUntil(Date.now() + 5 * 60 * 1000); // 5 minutes
-    };
-
-    if (isBlocked) {
-        return <BlockScreen platform={platform} onOverride={handleOverride} />;
-    }
 
     return (
-        <div className={`fixed top-4 right-4 z-[9999] bg-gray-900 text-white rounded-lg shadow-xl transition-all duration-300 font-sans ${isExpanded ? 'w-64' : 'w-12 h-12 overflow-hidden'}`}>
-
-            {/* Header / Draggable Handle */}
-            <div
-                className="flex items-center justify-between p-3 cursor-pointer bg-gray-800 hover:bg-gray-750"
-                onClick={() => setIsExpanded(!isExpanded)}
-            >
-                <div className="flex items-center gap-2">
-                    <Timer size={18} className="text-blue-400" />
-                    {isExpanded && <span className="font-bold text-sm">Target Focus</span>}
-                </div>
+        <div className="fixed top-4 right-4 z-[9999] bg-gray-900/95 text-white rounded-lg shadow-lg font-sans w-44 p-3">
+            <div className="flex items-center gap-2 mb-2">
+                <Timer size={14} className="text-blue-400 shrink-0" />
+                <span className="text-xs font-semibold text-gray-300">Today</span>
+                <span className="ml-auto font-mono text-sm font-bold text-blue-300">
+                    {formatTime(time)}
+                </span>
             </div>
 
-            {isExpanded && (
-                <div className="p-4 space-y-3 border-t border-gray-700">
-                    <div className="flex flex-col gap-1">
-                        <span className="text-xs text-gray-400 uppercase tracking-wider">Today's Time</span>
-                        <span className="text-2xl font-mono font-bold text-blue-300">{formatTime(time)}</span>
-                    </div>
+            {sessionLimit > 0 && (
+                <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs text-gray-400">Session</span>
+                    <span className="ml-auto font-mono text-xs text-gray-200">
+                        {formatTime(sessionSeconds)}
+                    </span>
+                </div>
+            )}
 
-                    {/* Video Count (YouTube/Shorts/Reels) */}
-                    {videoCount > 0 && (
-                        <div className="flex justify-between items-center text-sm text-gray-300">
-                            <span>Videos Watched</span>
-                            <span className="font-mono font-bold">{videoCount}</span>
-                        </div>
-                    )}
+            {effectiveDaily > 0 && (
+                <p className="text-[10px] text-gray-500 mb-1">
+                    Cap {formatTime(effectiveDaily)}
+                    {settings.schedule.enabled ? ' (schedule active)' : ''}
+                </p>
+            )}
 
-                    {limit > 0 && (
-                        <div className="flex items-center gap-2 p-2 bg-yellow-900/30 border border-yellow-700/50 rounded text-xs text-yellow-200">
-                            <AlertTriangle size={14} />
-                            <span>Limit: {formatTime(limit)}</span>
-                        </div>
-                    )}
+            {progress !== null && (
+                <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                        className={`h-full rounded-full transition-all ${progress >= 80 ? 'bg-amber-500' : 'bg-blue-500'} ${progress >= 100 ? 'bg-red-500' : ''}`}
+                        style={{ width: `${progress}%` }}
+                    />
                 </div>
             )}
         </div>

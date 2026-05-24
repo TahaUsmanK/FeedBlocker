@@ -1,9 +1,14 @@
 {
     "manifest_version": 3,
     "name": "FocusOverlay",
-    "version": "1.0.0",
+    "version": "1.1.0",
+    "description": "Track and limit time on YouTube, Instagram, and X.",
     "action": {
         "default_popup": "index.html"
+    },
+    "options_ui": {
+        "page": "options.html",
+        "open_in_tab": true
     },
     "background": {
         "service_worker": "src/background/index.ts",
@@ -11,39 +16,22 @@
     },
     "content_scripts": [
         {
-            "matches": [
-                "*://*.youtube.com/*"
-            ],
-            "js": [
-                "src/content/youtube/index.tsx"
-            ],
+            "matches": ["*://*.youtube.com/*"],
+            "js": ["src/content/youtube/index.tsx"],
             "run_at": "document_end"
         },
         {
-            "matches": [
-                "*://*.instagram.com/*"
-            ],
-            "js": [
-                "src/content/instagram/index.tsx"
-            ],
+            "matches": ["*://*.instagram.com/*"],
+            "js": ["src/content/instagram/index.tsx"],
             "run_at": "document_end"
         },
         {
-            "matches": [
-                "*://*.twitter.com/*",
-                "*://*.x.com/*"
-            ],
-            "js": [
-                "src/content/twitter/index.tsx"
-            ],
+            "matches": ["*://*.twitter.com/*", "*://*.x.com/*"],
+            "js": ["src/content/twitter/index.tsx"],
             "run_at": "document_end"
         }
     ],
-    "permissions": [
-        "storage",
-        "tabs",
-        "scripting"
-    ],
+    "permissions": ["storage", "alarms", "webNavigation", "tabs"],
     "host_permissions": [
         "*://*.youtube.com/*",
         "*://*.instagram.com/*",
