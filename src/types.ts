@@ -6,6 +6,7 @@ export interface DailyUsage {
     date: string; // YYYY-MM-DD
     total: number; // seconds
     byPlatform: Record<Platform, number>; // seconds
+    videoCounts: Record<Platform, number>; // number of videos/shorts watched
 }
 
 export interface AppSettings {

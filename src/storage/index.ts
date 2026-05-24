@@ -32,7 +32,8 @@ export const StorageService = {
             return {
                 date: today,
                 total: 0,
-                byPlatform: { youtube: 0, instagram: 0, twitter: 0, tiktok: 0 }
+                byPlatform: { youtube: 0, instagram: 0, twitter: 0, tiktok: 0 },
+                videoCounts: { youtube: 0, instagram: 0, twitter: 0, tiktok: 0 }
             };
         }
         return allUsage[today];
@@ -47,7 +48,8 @@ export const StorageService = {
             allUsage[today] = {
                 date: today,
                 total: 0,
-                byPlatform: { youtube: 0, instagram: 0, twitter: 0, tiktok: 0 }
+                byPlatform: { youtube: 0, instagram: 0, twitter: 0, tiktok: 0 },
+                videoCounts: { youtube: 0, instagram: 0, twitter: 0, tiktok: 0 }
             };
             // New day separate logic could go here, but for now we trust `updateStreak` called separately or lazy check
         }
@@ -55,6 +57,23 @@ export const StorageService = {
         allUsage[today].total += seconds;
         allUsage[today].byPlatform[platform] = (allUsage[today].byPlatform[platform] || 0) + seconds;
 
+        await chrome.storage.local.set({ [KEYS.USAGE]: allUsage });
+    },
+
+    async incrementVideoCount(platform: Platform, count: number = 1): Promise<void> {
+        const today = new Date().toISOString().split('T')[0];
+        const result = await chrome.storage.local.get(KEYS.USAGE);
+        const allUsage = result[KEYS.USAGE] || {};
+
+        if (!allUsage[today]) await this.incrementUsage(platform, 0); // Init if needed
+
+        // Re-fetch to be safe or just use object ref if we rely on JS single thread (safe in async generally if we await)
+        // Simpler: just modify what we have, assume init from incrementUsage call above worked or do it manually
+        if (!allUsage[today].videoCounts) {
+            allUsage[today].videoCounts = { youtube: 0, instagram: 0, twitter: 0, tiktok: 0 };
+        }
+
+        allUsage[today].videoCounts[platform] = (allUsage[today].videoCounts[platform] || 0) + count;
         await chrome.storage.local.set({ [KEYS.USAGE]: allUsage });
     },
 
@@ -85,11 +104,11 @@ export const StorageService = {
                 stats.push({
                     date: dateStr,
                     total: 0,
-                    byPlatform: { youtube: 0, instagram: 0, twitter: 0, tiktok: 0 }
+                    byPlatform: { youtube: 0, instagram: 0, twitter: 0, tiktok: 0 },
+                    videoCounts: { youtube: 0, instagram: 0, twitter: 0, tiktok: 0 }
                 });
             }
         }
-        return stats;
         return stats;
     },
 

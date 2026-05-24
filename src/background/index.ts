@@ -8,12 +8,17 @@ let pendingUsage: Record<Platform, number> = {
     tiktok: 0
 };
 
-// Listen for heartbeats from content scripts
-chrome.runtime.onMessage.addListener((message: { type: string; payload: unknown }, _sender: chrome.runtime.MessageSender, _sendResponse: (response?: unknown) => void) => {
+// Listen for heartbeats and events from content scripts
+chrome.runtime.onMessage.addListener((message: { type: string; payload: any }, _sender: chrome.runtime.MessageSender, _sendResponse: (response?: any) => void) => {
     if (message.type === 'HEARTBEAT') {
         const data = message.payload as HelperData;
         if (data.isActive && data.platform) {
             pendingUsage[data.platform] = (pendingUsage[data.platform] || 0) + 1;
+        }
+    } else if (message.type === 'VIDEO_VIEW') {
+        const { platform } = message.payload;
+        if (platform) {
+            StorageService.incrementVideoCount(platform);
         }
     }
 });

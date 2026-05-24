@@ -24,18 +24,23 @@ const tick = () => {
 
     // Twitter doesn't have a distinct "Shorts" URL structure like YouTube/IG Reels
     // We track total time on the platform for now.
-    chrome.runtime.sendMessage({
-        type: 'HEARTBEAT',
-        payload: {
-            platform: 'twitter' as Platform,
-            videoType: 'unknown',
-            isActive
-        }
-    });
+    try {
+        chrome.runtime.sendMessage({
+            type: 'HEARTBEAT',
+            payload: {
+                platform: 'twitter' as Platform,
+                videoType: 'unknown',
+                isActive
+            }
+        });
+    } catch (e) {
+        clearInterval(tickInterval);
+        return;
+    }
 
 };
 
-setInterval(tick, 1000);
+const tickInterval = setInterval(tick, 1000);
 console.log('FocusOverlay: Twitter Tracker Active');
 
 // --- UI Injection ---

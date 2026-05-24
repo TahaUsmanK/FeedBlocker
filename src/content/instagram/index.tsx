@@ -41,28 +41,38 @@ const tick = () => {
     // let's send heartbeat for everything on IG, but distinguish types.
 
     if (videoType === 'short') { // Only tracking Reels specifically as 'short'
-        chrome.runtime.sendMessage({
-            type: 'HEARTBEAT',
-            payload: {
-                platform: 'instagram' as Platform,
-                videoType,
-                isActive
-            }
-        });
+        try {
+            chrome.runtime.sendMessage({
+                type: 'HEARTBEAT',
+                payload: {
+                    platform: 'instagram' as Platform,
+                    videoType,
+                    isActive
+                }
+            });
+        } catch (e) {
+            clearInterval(tickInterval);
+            return;
+        }
     } else {
         // Generic tracking for feed
-        chrome.runtime.sendMessage({
-            type: 'HEARTBEAT',
-            payload: {
-                platform: 'instagram' as Platform,
-                videoType: 'video', // Treat feed as long-form/generic
-                isActive
-            }
-        });
+        try {
+            chrome.runtime.sendMessage({
+                type: 'HEARTBEAT',
+                payload: {
+                    platform: 'instagram' as Platform,
+                    videoType: 'video', // Treat feed as long-form/generic
+                    isActive
+                }
+            });
+        } catch (e) {
+            clearInterval(tickInterval);
+            return;
+        }
     }
 };
 
-setInterval(tick, 1000);
+const tickInterval = setInterval(tick, 1000);
 console.log('FocusOverlay: Instagram Tracker Active');
 
 // --- UI Injection ---

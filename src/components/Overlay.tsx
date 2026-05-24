@@ -15,17 +15,50 @@ export const Overlay = ({ platform = 'youtube' }: OverlayProps) => {
     const [overrideUntil, setOverrideUntil] = useState(0);
 
     useEffect(() => {
+        let localTime = time;
+
         const fetchData = async () => {
             const usage = await StorageService.getTodayUsage();
             const currentSettings = await StorageService.getSettings();
-            setTime(usage.byPlatform[platform] || 0);
+
+            // Sync with storage, but don't overwrite if local is slightly ahead due to tick
+            // Actually, storage is source of truth, but it lags. 
+            // We set base time from storage, then animate on top.
+            const storedTime = usage.byPlatform[platform] || 0;
+            if (Math.abs(storedTime - localTime) > 5) {
+                // Only sync if drift is > 5s (background flush rate)
+                setTime(storedTime);
+                localTime = storedTime;
+            }
+
+            setVideoCount(usage.videoCounts?.[platform] || 0);
             setSettings(currentSettings);
         };
 
+        const tick = () => {
+            // Check if content script detected activity
+            const host = document.getElementById('focus-overlay-host');
+            const isActive = host?.dataset.isActive === 'true';
+
+            if (isActive) {
+                setTime(t => {
+                    localTime = t + 1;
+                    return t + 1;
+                });
+            }
+        };
+
         fetchData();
-        const interval = setInterval(fetchData, 1000);
-        return () => clearInterval(interval);
+        const fetchInterval = setInterval(fetchData, 2000); // Sync every 2s
+        const tickInterval = setInterval(tick, 1000); // Animate every 1s
+
+        return () => {
+            clearInterval(fetchInterval);
+            clearInterval(tickInterval);
+        };
     }, []);
+
+    const [videoCount, setVideoCount] = useState(0);
 
     const formatTime = (seconds: number) => {
         const h = Math.floor(seconds / 3600);
@@ -58,11 +91,6 @@ export const Overlay = ({ platform = 'youtube' }: OverlayProps) => {
                     <Timer size={18} className="text-blue-400" />
                     {isExpanded && <span className="font-bold text-sm">Target Focus</span>}
                 </div>
-                {!isExpanded && (
-                    <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center pointer-events-none">
-                        {/* Mini view content could go here */}
-                    </div>
-                )}
             </div>
 
             {isExpanded && (
@@ -71,6 +99,14 @@ export const Overlay = ({ platform = 'youtube' }: OverlayProps) => {
                         <span className="text-xs text-gray-400 uppercase tracking-wider">Today's Time</span>
                         <span className="text-2xl font-mono font-bold text-blue-300">{formatTime(time)}</span>
                     </div>
+
+                    {/* Video Count (YouTube/Shorts/Reels) */}
+                    {videoCount > 0 && (
+                        <div className="flex justify-between items-center text-sm text-gray-300">
+                            <span>Videos Watched</span>
+                            <span className="font-mono font-bold">{videoCount}</span>
+                        </div>
+                    )}
 
                     {limit > 0 && (
                         <div className="flex items-center gap-2 p-2 bg-yellow-900/30 border border-yellow-700/50 rounded text-xs text-yellow-200">

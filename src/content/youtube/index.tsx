@@ -7,6 +7,7 @@ import css from '../../index.css?inline';
 // --- Tracker Logic ---
 let lastActiveTime = Date.now();
 const IDLE_THRESHOLD = 30000; // 30 seconds
+let currentVideoId = '';
 
 const updateActivity = () => {
     lastActiveTime = Date.now();
@@ -24,26 +25,83 @@ const getVideoType = (): VideoType => {
     return 'unknown';
 };
 
+const getVideoId = (): string => {
+    const url = new URL(window.location.href);
+    if (url.pathname.includes('/shorts/')) {
+        return url.pathname.split('/shorts/')[1];
+    }
+    if (url.pathname.includes('/watch')) {
+        return url.searchParams.get('v') || '';
+    }
+    return '';
+}
+
 const tick = () => {
     const now = Date.now();
     const isIdle = (now - lastActiveTime) > IDLE_THRESHOLD;
     const isVisible = document.visibilityState === 'visible';
-    const isActive = !isIdle && isVisible;
+
+    // Check if any video is playing
+    const videos = document.getElementsByTagName('video');
+    let isVideoPlaying = false;
+    for (let i = 0; i < videos.length; i++) {
+        if (!videos[i].paused && !videos[i].ended && videos[i].currentTime > 0) {
+            isVideoPlaying = true;
+            break;
+        }
+    }
+
+    // Active if:
+    // 1. Not idle AND Visible (Browsing/Scrolling)
+    // 2. OR Video is playing (Watching/Listening in background)
+    const isActive = (!isIdle && isVisible) || isVideoPlaying;
+
     const videoType = getVideoType();
+    const videoId = getVideoId();
+
+    // Track Video Views
+    if (videoId && videoId !== currentVideoId && videoType !== 'unknown') {
+        currentVideoId = videoId;
+        try {
+            chrome.runtime.sendMessage({
+                type: 'VIDEO_VIEW',
+                payload: {
+                    platform: 'youtube' as Platform,
+                    videoType
+                }
+            });
+        } catch (e) {
+            console.log('FocusOverlay: Extension context invalidated. Stopping tracker.');
+            clearInterval(tickInterval);
+            return;
+        }
+    }
 
     if (videoType !== 'unknown') {
-        chrome.runtime.sendMessage({
-            type: 'HEARTBEAT',
-            payload: {
-                platform: 'youtube' as Platform,
-                videoType,
-                isActive
+        try {
+            chrome.runtime.sendMessage({
+                type: 'HEARTBEAT',
+                payload: {
+                    platform: 'youtube' as Platform,
+                    videoType,
+                    isActive
+                }
+            });
+
+            // Optimistic UI Update for Overlay
+            const overlayHost = document.getElementById('focus-overlay-host');
+            if (overlayHost) {
+                overlayHost.dataset.isActive = isActive ? 'true' : 'false';
             }
-        });
+        } catch (e) {
+            console.log('FocusOverlay: Extension context invalidated. Stopping tracker.');
+            clearInterval(tickInterval);
+            return;
+        }
     }
 };
 
-setInterval(tick, 1000);
+const tickInterval = setInterval(tick, 1000);
 console.log('FocusOverlay: YouTube Tracker Active');
 
 // --- UI Injection ---
@@ -67,7 +125,7 @@ const mountOverlay = () => {
 
     createRoot(root).render(
         <React.StrictMode>
-        <Overlay />
+            <Overlay />
         </React.StrictMode>
     );
 };
