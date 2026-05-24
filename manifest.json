@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
     "name": "FocusOverlay",
-    "version": "1.1.0",
-    "description": "Track and limit time on YouTube, Instagram, and X.",
+    "version": "1.2.0",
+    "description": "Track and limit time on social and video sites.",
     "action": {
         "default_popup": "index.html"
     },
@@ -16,26 +16,43 @@
     },
     "content_scripts": [
         {
-            "matches": ["*://*.youtube.com/*"],
-            "js": ["src/content/youtube/index.tsx"],
-            "run_at": "document_end"
-        },
-        {
-            "matches": ["*://*.instagram.com/*"],
-            "js": ["src/content/instagram/index.tsx"],
-            "run_at": "document_end"
-        },
-        {
-            "matches": ["*://*.twitter.com/*", "*://*.x.com/*"],
-            "js": ["src/content/twitter/index.tsx"],
-            "run_at": "document_end"
+            "matches": [
+                "*://*.youtube.com/*",
+                "*://youtu.be/*",
+                "*://*.instagram.com/*",
+                "*://*.twitter.com/*",
+                "*://*.x.com/*",
+                "*://*.tiktok.com/*",
+                "*://*.facebook.com/*",
+                "*://*.fb.com/*",
+                "*://m.facebook.com/*",
+                "*://web.facebook.com/*",
+                "*://*.reddit.com/*",
+                "*://*.linkedin.com/*",
+                "*://*.twitch.tv/*",
+                "*://*.pinterest.com/*",
+                "*://pin.it/*"
+            ],
+            "js": ["src/content/index.tsx"],
+            "run_at": "document_idle"
         }
     ],
     "permissions": ["storage", "alarms", "webNavigation", "tabs"],
     "host_permissions": [
         "*://*.youtube.com/*",
+        "*://youtu.be/*",
         "*://*.instagram.com/*",
         "*://*.twitter.com/*",
-        "*://*.x.com/*"
+        "*://*.x.com/*",
+        "*://*.tiktok.com/*",
+        "*://*.facebook.com/*",
+        "*://*.fb.com/*",
+        "*://m.facebook.com/*",
+        "*://web.facebook.com/*",
+        "*://*.reddit.com/*",
+        "*://*.linkedin.com/*",
+        "*://*.twitch.tv/*",
+        "*://*.pinterest.com/*",
+        "*://pin.it/*"
     ]
 }

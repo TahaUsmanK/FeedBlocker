@@ -1,13 +1,10 @@
+import { emptyPlatformRecord } from '../lib/limits';
 import { StorageService } from '../storage';
-import { HelperData, Platform } from '../types';
+import { HelperData, Platform, TRACKED_PLATFORMS } from '../types';
 import { handleAlarm, setupAlarms } from './alarms';
 import { setupNavigationGuard } from './navigation';
 
-const pendingUsage: Record<Platform, number> = {
-    youtube: 0,
-    instagram: 0,
-    twitter: 0,
-};
+const pendingUsage = emptyPlatformRecord(0);
 
 chrome.runtime.onInstalled.addListener(() => {
     setupAlarms();
@@ -26,7 +23,7 @@ setupNavigationGuard();
 chrome.runtime.onMessage.addListener((message: { type: string; payload?: unknown }) => {
     if (message.type === 'HEARTBEAT') {
         const data = message.payload as HelperData;
-        if (data?.isActive && data.platform) {
+        if (data?.isActive && data.platform && TRACKED_PLATFORMS.includes(data.platform)) {
             pendingUsage[data.platform] = (pendingUsage[data.platform] || 0) + 1;
         }
         return;
@@ -34,7 +31,7 @@ chrome.runtime.onMessage.addListener((message: { type: string; payload?: unknown
 
     if (message.type === 'VIDEO_VIEW') {
         const { platform } = message.payload as { platform?: Platform };
-        if (platform) {
+        if (platform && TRACKED_PLATFORMS.includes(platform)) {
             StorageService.incrementVideoCount(platform);
         }
     }
@@ -44,7 +41,7 @@ setInterval(async () => {
     await StorageService.rolloverDayIfNeeded();
     await StorageService.clearExpiredCooldowns();
 
-    for (const platform of Object.keys(pendingUsage) as Platform[]) {
+    for (const platform of TRACKED_PLATFORMS) {
         if (pendingUsage[platform] > 0) {
             await StorageService.incrementUsage(platform, pendingUsage[platform]);
             pendingUsage[platform] = 0;

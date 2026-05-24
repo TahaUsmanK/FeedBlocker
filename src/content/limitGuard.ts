@@ -2,7 +2,7 @@ import { evaluateLimits } from '../lib/limits';
 import { StorageService } from '../storage';
 import { LimitCheckResult, Platform } from '../types';
 import { forceBlankPage } from '../utils/blankPage';
-import { SESSION_IDLE_RESET_MS } from './shared';
+import { SESSION_IDLE_RESET_MS } from '../lib/tracking/session';
 import { showWarningToast } from '../components/toastHost';
 
 const warned = { daily: false, session: false };

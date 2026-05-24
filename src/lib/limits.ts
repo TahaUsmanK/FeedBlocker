@@ -1,43 +1,30 @@
 import { isEvening, isWeekend } from './dates';
+import { hostToPlatform } from './platforms/registry';
 import {
     AppSettings,
     LimitCheckResult,
     Platform,
-    ScheduleSettings,
-    TrackingMode,
-    VideoType,
+    TRACKED_PLATFORMS,
 } from '../types';
 
-export function emptyPlatformRecord<T>(value: T): Record<Platform, T> {
-    return { youtube: value, instagram: value, twitter: value };
+export { hostToPlatform };
+
+export function emptyPlatformRecord(value: number): Record<Platform, number> {
+    return Object.fromEntries(TRACKED_PLATFORMS.map((p) => [p, value])) as Record<
+        Platform,
+        number
+    >;
 }
 
-export function hostToPlatform(hostname: string): Platform | null {
-    if (hostname.includes('youtube.com')) return 'youtube';
-    if (hostname.includes('instagram.com')) return 'instagram';
-    if (hostname.includes('twitter.com') || hostname.includes('x.com')) return 'twitter';
-    return null;
-}
-
-export function shouldTrackContent(
-    platform: Platform,
-    mode: TrackingMode,
-    videoType: VideoType,
-    pathname: string
-): boolean {
-    if (platform === 'twitter') return true;
-
-    if (platform === 'youtube') {
-        if (mode === 'all') return videoType !== 'unknown';
-        return pathname.includes('/shorts/');
+export function normalizePlatformRecord(
+    obj: Partial<Record<Platform, number>> | Record<string, number> | undefined
+): Record<Platform, number> {
+    const base = emptyPlatformRecord(0);
+    if (!obj) return base;
+    for (const p of TRACKED_PLATFORMS) {
+        if (typeof obj[p] === 'number') base[p] = obj[p];
     }
-
-    if (platform === 'instagram') {
-        if (mode === 'all') return true;
-        return pathname.includes('/reels/');
-    }
-
-    return true;
+    return base;
 }
 
 export function getEffectiveDailyLimit(
@@ -119,9 +106,4 @@ export function evaluateLimits(
         warnDaily,
         warnSession,
     };
-}
-
-export function describeSchedule(schedule: ScheduleSettings): string {
-    if (!schedule.enabled) return 'Off';
-    return `Evening ${schedule.eveningStartHour}:00–${schedule.eveningEndHour}:00, weekend caps`;
 }

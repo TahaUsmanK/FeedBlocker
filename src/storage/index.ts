@@ -1,5 +1,5 @@
 import { localDateString, nextMidnightTimestamp } from '../lib/dates';
-import { emptyPlatformRecord } from '../lib/limits';
+import { emptyPlatformRecord, normalizePlatformRecord } from '../lib/limits';
 import {
     AppSettings,
     CooldownState,
@@ -7,6 +7,7 @@ import {
     DEFAULT_SETTINGS,
     LimitLocks,
     Platform,
+    TRACKED_PLATFORMS,
 } from '../types';
 
 const KEYS = {
@@ -22,18 +23,27 @@ export type SaveSettingsResult =
     | { ok: false; error: string; lockedPlatforms: Platform[] };
 
 function migrateSettings(stored: Partial<AppSettings>): AppSettings {
+    const schedule = { ...DEFAULT_SETTINGS.schedule, ...stored.schedule };
     return {
-        limits: { ...DEFAULT_SETTINGS.limits, ...stored.limits },
-        sessionLimits: { ...DEFAULT_SETTINGS.sessionLimits, ...stored.sessionLimits },
+        limits: { ...DEFAULT_SETTINGS.limits, ...normalizePlatformRecord(stored.limits) },
+        sessionLimits: {
+            ...DEFAULT_SETTINGS.sessionLimits,
+            ...normalizePlatformRecord(stored.sessionLimits),
+        },
         trackingMode: { ...DEFAULT_SETTINGS.trackingMode, ...stored.trackingMode },
-        schedule: { ...DEFAULT_SETTINGS.schedule, ...stored.schedule },
+        schedule: {
+            ...schedule,
+            eveningLimits: {
+                ...DEFAULT_SETTINGS.schedule.eveningLimits,
+                ...normalizePlatformRecord(schedule.eveningLimits),
+            },
+            weekendLimits: {
+                ...DEFAULT_SETTINGS.schedule.weekendLimits,
+                ...normalizePlatformRecord(schedule.weekendLimits),
+            },
+        },
         cooldownMinutes: stored.cooldownMinutes ?? DEFAULT_SETTINGS.cooldownMinutes,
     };
-}
-
-function stripTiktok<T extends Record<string, unknown>>(obj: T): Record<Platform, number> {
-    const { youtube = 0, instagram = 0, twitter = 0 } = obj as Record<string, number>;
-    return { youtube, instagram, twitter };
 }
 
 export const StorageService = {
@@ -75,8 +85,8 @@ export const StorageService = {
         return {
             date: day.date,
             total: day.total,
-            byPlatform: stripTiktok(day.byPlatform || {}),
-            videoCounts: stripTiktok(day.videoCounts || {}),
+            byPlatform: normalizePlatformRecord(day.byPlatform),
+            videoCounts: normalizePlatformRecord(day.videoCounts),
         };
     },
 
@@ -199,7 +209,7 @@ export const StorageService = {
         const now = Date.now();
         const lockedPlatforms: Platform[] = [];
 
-        for (const platform of ['youtube', 'instagram', 'twitter'] as Platform[]) {
+        for (const platform of TRACKED_PLATFORMS) {
             const dailyLocked = this.isPlatformDailyLocked(platform, locks, now);
             const sessionLocked = this.isPlatformSessionLocked(platform, locks, now);
 
@@ -255,20 +265,18 @@ export const StorageService = {
     async exportUsageCsv(): Promise<string> {
         const all = await this.getAllUsage();
         const dates = Object.keys(all).sort();
-        const header = 'date,total,youtube,instagram,twitter,youtube_videos,instagram_videos,twitter_videos';
+        const usageCols = TRACKED_PLATFORMS.join(',');
+        const videoCols = TRACKED_PLATFORMS.map((p) => `${p}_videos`).join(',');
+        const header = `date,total,${usageCols},${videoCols}`;
         const rows = dates.map((date) => {
             const d = all[date];
-            const bp = stripTiktok(d.byPlatform || {});
-            const vc = stripTiktok(d.videoCounts || {});
+            const bp = normalizePlatformRecord(d.byPlatform);
+            const vc = normalizePlatformRecord(d.videoCounts);
             return [
                 date,
                 d.total,
-                bp.youtube,
-                bp.instagram,
-                bp.twitter,
-                vc.youtube,
-                vc.instagram,
-                vc.twitter,
+                ...TRACKED_PLATFORMS.map((p) => bp[p]),
+                ...TRACKED_PLATFORMS.map((p) => vc[p]),
             ].join(',');
         });
         return [header, ...rows].join('\n');
@@ -290,8 +298,8 @@ export const StorageService = {
                 stats.push({
                     date: day.date,
                     total: day.total,
-                    byPlatform: stripTiktok(day.byPlatform || {}),
-                    videoCounts: stripTiktok(day.videoCounts || {}),
+                    byPlatform: normalizePlatformRecord(day.byPlatform),
+                    videoCounts: normalizePlatformRecord(day.videoCounts),
                 });
             } else {
                 stats.push({

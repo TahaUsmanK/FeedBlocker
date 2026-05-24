@@ -1,8 +1,5 @@
-import { hostToPlatform } from '../lib/limits';
+import { ALL_TRACKED_HOSTS, hostToPlatform } from '../lib/platforms/registry';
 import { StorageService } from '../storage';
-import { Platform } from '../types';
-
-const TRACKED_HOSTS = ['youtube.com', 'instagram.com', 'twitter.com', 'x.com'];
 
 export function setupNavigationGuard() {
     chrome.webNavigation.onCommitted.addListener(async (details) => {
@@ -15,7 +12,7 @@ export function setupNavigationGuard() {
             return;
         }
 
-        if (!TRACKED_HOSTS.some((h) => hostname.includes(h))) return;
+        if (!ALL_TRACKED_HOSTS.some((h) => hostname.includes(h))) return;
 
         const platform = hostToPlatform(hostname);
         if (!platform) return;
@@ -26,10 +23,4 @@ export function setupNavigationGuard() {
             chrome.tabs.update(details.tabId, { url: 'about:blank' });
         }
     });
-}
-
-export async function isPlatformInCooldown(platform: Platform): Promise<boolean> {
-    await StorageService.clearExpiredCooldowns();
-    const until = await StorageService.getCooldownUntil(platform);
-    return until > Date.now();
 }

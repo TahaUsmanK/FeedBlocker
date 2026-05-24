@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Save, Lock } from 'lucide-react';
 import { StorageService } from '../storage';
+import { getModeOptionsForPlatform } from '../lib/platforms/registry';
 import { AppSettings, Platform, TRACKED_PLATFORMS, TrackingMode } from '../types';
 
 function formatLockUntil(ts: number): string {
@@ -118,36 +119,25 @@ export const SettingsForm = () => {
 
             <section className="space-y-4">
                 <h2 className="text-lg font-bold text-gray-900">Tracking mode</h2>
+                <p className="text-sm text-gray-500">
+                    Controls what content counts toward limits. Video detection uses visible
+                    playback in the viewport.
+                </p>
                 <div className="space-y-3">
-                    <ModeSelect
-                        platform="youtube"
-                        value={settings.trackingMode.youtube}
-                        options={[
-                            { value: 'all', label: 'All YouTube (watch + Shorts)' },
-                            { value: 'shorts_only', label: 'Shorts only' },
-                        ]}
-                        onChange={(v) =>
-                            setSettings({
-                                ...settings,
-                                trackingMode: { ...settings.trackingMode, youtube: v },
-                            })
-                        }
-                    />
-                    <ModeSelect
-                        platform="instagram"
-                        value={settings.trackingMode.instagram}
-                        options={[
-                            { value: 'all', label: 'All Instagram' },
-                            { value: 'reels_only', label: 'Reels only' },
-                        ]}
-                        onChange={(v) =>
-                            setSettings({
-                                ...settings,
-                                trackingMode: { ...settings.trackingMode, instagram: v },
-                            })
-                        }
-                    />
-                    <p className="text-sm text-gray-500">X / Twitter always tracks the full site.</p>
+                    {TRACKED_PLATFORMS.map((p) => (
+                        <ModeSelect
+                            key={`mode-${p}`}
+                            platform={p}
+                            value={settings.trackingMode[p]}
+                            options={getModeOptionsForPlatform(p)}
+                            onChange={(v) =>
+                                setSettings({
+                                    ...settings,
+                                    trackingMode: { ...settings.trackingMode, [p]: v },
+                                })
+                            }
+                        />
+                    ))}
                 </div>
             </section>
 

@@ -1,9 +1,17 @@
-export type Platform = 'youtube' | 'instagram' | 'twitter';
+export type Platform =
+    | 'youtube'
+    | 'instagram'
+    | 'twitter'
+    | 'tiktok'
+    | 'facebook'
+    | 'reddit'
+    | 'linkedin'
+    | 'twitch'
+    | 'pinterest';
 
 export type VideoType = 'short' | 'video' | 'unknown';
 
-/** YouTube: all pages vs Shorts only. Instagram: all vs Reels only. */
-export type TrackingMode = 'all' | 'shorts_only' | 'reels_only';
+export type TrackingMode = 'all' | 'shorts_only' | 'reels_only' | 'video_only';
 
 export interface DailyUsage {
     date: string;
@@ -14,13 +22,9 @@ export interface DailyUsage {
 
 export interface ScheduleSettings {
     enabled: boolean;
-    /** Hour 0–23 when evening stricter caps start */
     eveningStartHour: number;
-    /** Hour 0–23 when evening caps end (exclusive) */
     eveningEndHour: number;
-    /** Daily caps in minutes during evening; 0 = use base daily limit */
     eveningLimits: Record<Platform, number>;
-    /** Daily caps in minutes on Sat/Sun; 0 = use base daily limit */
     weekendLimits: Record<Platform, number>;
 }
 
@@ -29,14 +33,11 @@ export interface AppSettings {
     sessionLimits: Record<Platform, number>;
     trackingMode: Record<Platform, TrackingMode>;
     schedule: ScheduleSettings;
-    /** Minutes before user can revisit site after a block */
     cooldownMinutes: number;
 }
 
 export interface LimitLocks {
-    /** ISO timestamp — cannot raise daily limits until this time */
     daily: Partial<Record<Platform, number>>;
-    /** ISO timestamp — cannot raise session limits until this time */
     session: Partial<Record<Platform, number>>;
 }
 
@@ -62,20 +63,49 @@ export interface LimitCheckResult {
     warnSession: boolean;
 }
 
-export const TRACKED_PLATFORMS: Platform[] = ['youtube', 'instagram', 'twitter'];
+export const TRACKED_PLATFORMS: Platform[] = [
+    'youtube',
+    'instagram',
+    'twitter',
+    'tiktok',
+    'facebook',
+    'reddit',
+    'linkedin',
+    'twitch',
+    'pinterest',
+];
 
 export const DEFAULT_SCHEDULE: ScheduleSettings = {
     enabled: false,
     eveningStartHour: 18,
     eveningEndHour: 23,
-    eveningLimits: { youtube: 0, instagram: 0, twitter: 0 },
-    weekendLimits: { youtube: 0, instagram: 0, twitter: 0 },
+    eveningLimits: Object.fromEntries(TRACKED_PLATFORMS.map((p) => [p, 0])) as Record<
+        Platform,
+        number
+    >,
+    weekendLimits: Object.fromEntries(TRACKED_PLATFORMS.map((p) => [p, 0])) as Record<
+        Platform,
+        number
+    >,
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
-    limits: { youtube: 0, instagram: 0, twitter: 0 },
-    sessionLimits: { youtube: 0, instagram: 0, twitter: 0 },
-    trackingMode: { youtube: 'all', instagram: 'all', twitter: 'all' },
+    limits: Object.fromEntries(TRACKED_PLATFORMS.map((p) => [p, 0])) as Record<Platform, number>,
+    sessionLimits: Object.fromEntries(TRACKED_PLATFORMS.map((p) => [p, 0])) as Record<
+        Platform,
+        number
+    >,
+    trackingMode: {
+        youtube: 'all',
+        instagram: 'all',
+        twitter: 'all',
+        tiktok: 'all',
+        facebook: 'all',
+        reddit: 'all',
+        linkedin: 'all',
+        twitch: 'video_only',
+        pinterest: 'all',
+    },
     schedule: DEFAULT_SCHEDULE,
     cooldownMinutes: 15,
 };
