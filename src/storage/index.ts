@@ -9,9 +9,15 @@ import {
     Platform,
     TRACKED_PLATFORMS,
 } from '../types';
+import {
+    isUsageStorageKey,
+    LEGACY_USAGE_KEY,
+    todayUsageKey,
+    usageKeyForDate,
+} from './keys';
+import { withStorageLock } from './mutex';
 
 const KEYS = {
-    USAGE: 'usage',
     SETTINGS: 'settings',
     LOCKS: 'limitLocks',
     COOLDOWN: 'cooldown',
@@ -21,6 +27,15 @@ const KEYS = {
 export type SaveSettingsResult =
     | { ok: true }
     | { ok: false; error: string; lockedPlatforms: Platform[] };
+
+function emptyDay(date: string): DailyUsage {
+    return {
+        date,
+        total: 0,
+        byPlatform: emptyPlatformRecord(0),
+        videoCounts: emptyPlatformRecord(0),
+    };
+}
 
 function migrateSettings(stored: Partial<AppSettings>): AppSettings {
     const schedule = { ...DEFAULT_SETTINGS.schedule, ...stored.schedule };
@@ -46,7 +61,53 @@ function migrateSettings(stored: Partial<AppSettings>): AppSettings {
     };
 }
 
+async function readDay(date: string): Promise<DailyUsage> {
+    const key = usageKeyForDate(date);
+    const result = await chrome.storage.local.get(key);
+    const day = result[key] as DailyUsage | undefined;
+    if (!day) return emptyDay(date);
+    return {
+        date: day.date || date,
+        total: day.total || 0,
+        byPlatform: normalizePlatformRecord(day.byPlatform),
+        videoCounts: normalizePlatformRecord(day.videoCounts),
+    };
+}
+
+async function writeDay(day: DailyUsage): Promise<void> {
+    await chrome.storage.local.set({ [usageKeyForDate(day.date)]: day });
+}
+
+let legacyMigrated = false;
+
 export const StorageService = {
+    async migrateLegacyUsageIfNeeded(): Promise<void> {
+        if (legacyMigrated) return;
+        await withStorageLock(async () => {
+            if (legacyMigrated) return;
+            const result = await chrome.storage.local.get(LEGACY_USAGE_KEY);
+            const legacy = result[LEGACY_USAGE_KEY] as Record<string, DailyUsage> | undefined;
+            if (!legacy || typeof legacy !== 'object') {
+                legacyMigrated = true;
+                return;
+            }
+
+            const toSet: Record<string, DailyUsage> = {};
+            for (const [date, day] of Object.entries(legacy)) {
+                toSet[usageKeyForDate(date)] = {
+                    ...emptyDay(date),
+                    ...day,
+                    date,
+                    byPlatform: normalizePlatformRecord(day.byPlatform),
+                    videoCounts: normalizePlatformRecord(day.videoCounts),
+                };
+            }
+            await chrome.storage.local.set(toSet);
+            await chrome.storage.local.remove(LEGACY_USAGE_KEY);
+            legacyMigrated = true;
+        });
+    },
+
     async getCurrentDateKey(): Promise<string> {
         const result = await chrome.storage.local.get(KEYS.CURRENT_DATE);
         return (result[KEYS.CURRENT_DATE] as string) || '';
@@ -67,70 +128,32 @@ export const StorageService = {
     },
 
     async getTodayUsage(): Promise<DailyUsage> {
+        await this.migrateLegacyUsageIfNeeded();
         await this.rolloverDayIfNeeded();
-        const today = localDateString();
-        const result = await chrome.storage.local.get(KEYS.USAGE);
-        const allUsage = result[KEYS.USAGE] || {};
-
-        if (!allUsage[today]) {
-            return {
-                date: today,
-                total: 0,
-                byPlatform: emptyPlatformRecord(0),
-                videoCounts: emptyPlatformRecord(0),
-            };
-        }
-
-        const day = allUsage[today];
-        return {
-            date: day.date,
-            total: day.total,
-            byPlatform: normalizePlatformRecord(day.byPlatform),
-            videoCounts: normalizePlatformRecord(day.videoCounts),
-        };
+        return readDay(localDateString());
     },
 
     async incrementUsage(platform: Platform, seconds: number = 1): Promise<void> {
-        await this.rolloverDayIfNeeded();
-        const today = localDateString();
-        const result = await chrome.storage.local.get(KEYS.USAGE);
-        const allUsage = result[KEYS.USAGE] || {};
+        if (seconds <= 0) return;
 
-        if (!allUsage[today]) {
-            allUsage[today] = {
-                date: today,
-                total: 0,
-                byPlatform: emptyPlatformRecord(0),
-                videoCounts: emptyPlatformRecord(0),
-            };
-        }
-
-        allUsage[today].total += seconds;
-        allUsage[today].byPlatform[platform] =
-            (allUsage[today].byPlatform[platform] || 0) + seconds;
-
-        await chrome.storage.local.set({ [KEYS.USAGE]: allUsage });
+        await withStorageLock(async () => {
+            await this.rolloverDayIfNeeded();
+            const today = localDateString();
+            const day = await readDay(today);
+            day.total += seconds;
+            day.byPlatform[platform] = (day.byPlatform[platform] || 0) + seconds;
+            await writeDay(day);
+        });
     },
 
     async incrementVideoCount(platform: Platform, count: number = 1): Promise<void> {
-        await this.rolloverDayIfNeeded();
-        const today = localDateString();
-        const result = await chrome.storage.local.get(KEYS.USAGE);
-        const allUsage = result[KEYS.USAGE] || {};
-
-        if (!allUsage[today]) {
-            await this.incrementUsage(platform, 0);
-            const refreshed = await chrome.storage.local.get(KEYS.USAGE);
-            Object.assign(allUsage, refreshed[KEYS.USAGE]);
-        }
-
-        if (!allUsage[today].videoCounts) {
-            allUsage[today].videoCounts = emptyPlatformRecord(0);
-        }
-
-        allUsage[today].videoCounts[platform] =
-            (allUsage[today].videoCounts[platform] || 0) + count;
-        await chrome.storage.local.set({ [KEYS.USAGE]: allUsage });
+        await withStorageLock(async () => {
+            await this.rolloverDayIfNeeded();
+            const today = localDateString();
+            const day = await readDay(today);
+            day.videoCounts[platform] = (day.videoCounts[platform] || 0) + count;
+            await writeDay(day);
+        });
     },
 
     async getSettings(): Promise<AppSettings> {
@@ -201,7 +224,6 @@ export const StorageService = {
         if (changed) await chrome.storage.local.set({ [KEYS.COOLDOWN]: cd });
     },
 
-    /** Reject increases to limits while a platform lock is active */
     async saveSettings(partial: Partial<AppSettings>): Promise<SaveSettingsResult> {
         const current = await this.getSettings();
         const merged = migrateSettings({ ...current, ...partial });
@@ -250,16 +272,25 @@ export const StorageService = {
     },
 
     async getAllUsage(): Promise<Record<string, DailyUsage>> {
-        const result = await chrome.storage.local.get(KEYS.USAGE);
-        return (result[KEYS.USAGE] as Record<string, DailyUsage>) || {};
+        await this.migrateLegacyUsageIfNeeded();
+        const all = await chrome.storage.local.get(null);
+        const out: Record<string, DailyUsage> = {};
+        for (const [key, value] of Object.entries(all)) {
+            if (!isUsageStorageKey(key)) continue;
+            const date = key.replace('usage:', '');
+            const day = value as DailyUsage;
+            out[date] = {
+                date,
+                total: day.total || 0,
+                byPlatform: normalizePlatformRecord(day.byPlatform),
+                videoCounts: normalizePlatformRecord(day.videoCounts),
+            };
+        }
+        return out;
     },
 
     async resetTodayUsage(): Promise<void> {
-        const today = localDateString();
-        const result = await chrome.storage.local.get(KEYS.USAGE);
-        const allUsage = result[KEYS.USAGE] || {};
-        delete allUsage[today];
-        await chrome.storage.local.set({ [KEYS.USAGE]: allUsage });
+        await chrome.storage.local.remove(todayUsageKey());
     },
 
     async exportUsageCsv(): Promise<string> {
@@ -270,46 +301,40 @@ export const StorageService = {
         const header = `date,total,${usageCols},${videoCols}`;
         const rows = dates.map((date) => {
             const d = all[date];
-            const bp = normalizePlatformRecord(d.byPlatform);
-            const vc = normalizePlatformRecord(d.videoCounts);
             return [
                 date,
                 d.total,
-                ...TRACKED_PLATFORMS.map((p) => bp[p]),
-                ...TRACKED_PLATFORMS.map((p) => vc[p]),
+                ...TRACKED_PLATFORMS.map((p) => d.byPlatform[p]),
+                ...TRACKED_PLATFORMS.map((p) => d.videoCounts[p]),
             ].join(',');
         });
         return [header, ...rows].join('\n');
     },
 
     async getWeeklyStats(): Promise<DailyUsage[]> {
-        const result = await chrome.storage.local.get(KEYS.USAGE);
-        const allUsage = result[KEYS.USAGE] || {};
-        const stats: DailyUsage[] = [];
+        await this.migrateLegacyUsageIfNeeded();
         const today = new Date();
+        const keys: string[] = [];
+        const dates: string[] = [];
 
         for (let i = 6; i >= 0; i--) {
             const d = new Date(today);
             d.setDate(today.getDate() - i);
             const dateStr = localDateString(d);
-
-            if (allUsage[dateStr]) {
-                const day = allUsage[dateStr];
-                stats.push({
-                    date: day.date,
-                    total: day.total,
-                    byPlatform: normalizePlatformRecord(day.byPlatform),
-                    videoCounts: normalizePlatformRecord(day.videoCounts),
-                });
-            } else {
-                stats.push({
-                    date: dateStr,
-                    total: 0,
-                    byPlatform: emptyPlatformRecord(0),
-                    videoCounts: emptyPlatformRecord(0),
-                });
-            }
+            dates.push(dateStr);
+            keys.push(usageKeyForDate(dateStr));
         }
-        return stats;
+
+        const result = await chrome.storage.local.get(keys);
+        return dates.map((dateStr) => {
+            const day = result[usageKeyForDate(dateStr)] as DailyUsage | undefined;
+            if (!day) return emptyDay(dateStr);
+            return {
+                date: dateStr,
+                total: day.total || 0,
+                byPlatform: normalizePlatformRecord(day.byPlatform),
+                videoCounts: normalizePlatformRecord(day.videoCounts),
+            };
+        });
     },
 };

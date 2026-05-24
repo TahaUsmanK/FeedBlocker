@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
-import { Save, Lock } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { ChevronDown, Save, Lock } from 'lucide-react';
 import { StorageService } from '../storage';
-import { getModeOptionsForPlatform } from '../lib/platforms/registry';
+import { getModeOptionsForPlatform, PLATFORM_BY_ID } from '../lib/platforms/registry';
+import { describeEveningWindow } from '../lib/scheduleHelp';
 import { AppSettings, Platform, TRACKED_PLATFORMS, TrackingMode } from '../types';
+import { DurationInput } from './DurationInput';
 
 function formatLockUntil(ts: number): string {
     return new Date(ts).toLocaleString();
@@ -13,32 +15,47 @@ export const SettingsForm = () => {
     const [locks, setLocks] = useState<Awaited<ReturnType<typeof StorageService.getLimitLocks>> | null>(
         null
     );
+    const [expanded, setExpanded] = useState<Platform | null>('youtube');
     const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
     const [saving, setSaving] = useState(false);
 
-    const load = async () => {
+    const load = useCallback(async () => {
         const [s, l] = await Promise.all([
             StorageService.getSettings(),
             StorageService.getLimitLocks(),
         ]);
         setSettings(s);
         setLocks(l);
-    };
+    }, []);
 
     useEffect(() => {
         load();
-    }, []);
+    }, [load]);
 
-    const setLimit = (
+    const setLimitSeconds = (
         field: 'limits' | 'sessionLimits',
         platform: Platform,
-        minutes: number
+        totalMinutes: number
     ) => {
         if (!settings) return;
         setSettings({
             ...settings,
-            [field]: { ...settings[field], [platform]: minutes * 60 },
+            [field]: { ...settings[field], [platform]: totalMinutes * 60 },
         });
+    };
+
+    const applyDailyToAll = (totalMinutes: number) => {
+        if (!settings) return;
+        const next = { ...settings.limits };
+        for (const p of TRACKED_PLATFORMS) next[p] = totalMinutes * 60;
+        setSettings({ ...settings, limits: next });
+    };
+
+    const applySessionToAll = (totalMinutes: number) => {
+        if (!settings) return;
+        const next = { ...settings.sessionLimits };
+        for (const p of TRACKED_PLATFORMS) next[p] = totalMinutes * 60;
+        setSettings({ ...settings, sessionLimits: next });
     };
 
     const save = async () => {
@@ -65,11 +82,8 @@ export const SettingsForm = () => {
     }
 
     const now = Date.now();
-
-    const isDailyLocked = (p: Platform) =>
-        StorageService.isPlatformDailyLocked(p, locks, now);
-    const isSessionLocked = (p: Platform) =>
-        StorageService.isPlatformSessionLocked(p, locks, now);
+    const isDailyLocked = (p: Platform) => StorageService.isPlatformDailyLocked(p, locks, now);
+    const isSessionLocked = (p: Platform) => StorageService.isPlatformSessionLocked(p, locks, now);
 
     return (
         <div className="space-y-8 max-w-2xl">
@@ -81,64 +95,125 @@ export const SettingsForm = () => {
                 </div>
             )}
 
-            <section className="space-y-4">
-                <h2 className="text-lg font-bold text-gray-900">Daily limits</h2>
-                <p className="text-sm text-gray-500">
-                    Max active time per day. Hitting the limit sends the tab to a blank page and
-                    locks limit increases until midnight.
-                </p>
-                {TRACKED_PLATFORMS.map((p) => (
-                    <LimitRow
-                        key={`d-${p}`}
-                        platform={p}
-                        minutes={Math.floor(settings.limits[p] / 60)}
-                        locked={isDailyLocked(p)}
-                        lockUntil={locks.daily[p]}
-                        onChange={(m) => setLimit('limits', p, m)}
-                    />
-                ))}
-            </section>
-
-            <section className="space-y-4">
-                <h2 className="text-lg font-bold text-gray-900">Session limits</h2>
-                <p className="text-sm text-gray-500">
-                    Max continuous active time per visit. Resets after 5 minutes idle. Locks
-                    session limit increases until the session resets.
-                </p>
-                {TRACKED_PLATFORMS.map((p) => (
-                    <LimitRow
-                        key={`s-${p}`}
-                        platform={p}
-                        minutes={Math.floor(settings.sessionLimits[p] / 60)}
-                        locked={isSessionLocked(p)}
-                        lockUntil={locks.session[p]}
-                        onChange={(m) => setLimit('sessionLimits', p, m)}
-                    />
-                ))}
-            </section>
-
-            <section className="space-y-4">
-                <h2 className="text-lg font-bold text-gray-900">Tracking mode</h2>
-                <p className="text-sm text-gray-500">
-                    Controls what content counts toward limits. Video detection uses visible
-                    playback in the viewport.
-                </p>
-                <div className="space-y-3">
-                    {TRACKED_PLATFORMS.map((p) => (
-                        <ModeSelect
-                            key={`mode-${p}`}
-                            platform={p}
-                            value={settings.trackingMode[p]}
-                            options={getModeOptionsForPlatform(p)}
-                            onChange={(v) =>
-                                setSettings({
-                                    ...settings,
-                                    trackingMode: { ...settings.trackingMode, [p]: v },
-                                })
-                            }
-                        />
-                    ))}
+            <section className="space-y-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                <h2 className="text-sm font-bold text-gray-900">Bulk actions</h2>
+                <div className="flex flex-wrap gap-4 items-end">
+                    <div>
+                        <p className="text-xs text-gray-500 mb-1">Set daily limit for all</p>
+                        <DurationInput totalMinutes={0} onChange={applyDailyToAll} />
+                    </div>
+                    <div>
+                        <p className="text-xs text-gray-500 mb-1">Set session limit for all</p>
+                        <DurationInput totalMinutes={0} onChange={applySessionToAll} />
+                    </div>
                 </div>
+            </section>
+
+            <section className="space-y-2">
+                <h2 className="text-lg font-bold text-gray-900">Per-site limits</h2>
+                <p className="text-sm text-gray-500">
+                    Expand a site to edit daily limit, session limit, and tracking mode.
+                </p>
+                {TRACKED_PLATFORMS.map((p) => {
+                    const isOpen = expanded === p;
+                    const def = PLATFORM_BY_ID[p];
+                    return (
+                        <div
+                            key={p}
+                            className="border border-gray-200 rounded-xl overflow-hidden bg-white"
+                        >
+                            <button
+                                type="button"
+                                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 text-left"
+                                onClick={() => setExpanded(isOpen ? null : p)}
+                            >
+                                <span className="font-semibold text-gray-900">{def.label}</span>
+                                <ChevronDown
+                                    size={18}
+                                    className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                                />
+                            </button>
+                            {isOpen && (
+                                <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
+                                    <LimitField
+                                        label="Daily limit"
+                                        totalMinutes={Math.floor(settings.limits[p] / 60)}
+                                        locked={isDailyLocked(p)}
+                                        lockUntil={locks.daily[p]}
+                                        onChange={(m) => setLimitSeconds('limits', p, m)}
+                                    />
+                                    <LimitField
+                                        label="Session limit"
+                                        totalMinutes={Math.floor(settings.sessionLimits[p] / 60)}
+                                        locked={isSessionLocked(p)}
+                                        lockUntil={locks.session[p]}
+                                        onChange={(m) => setLimitSeconds('sessionLimits', p, m)}
+                                    />
+                                    <label className="block text-sm">
+                                        <span className="font-medium text-gray-800">Tracking mode</span>
+                                        <select
+                                            className="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm"
+                                            value={settings.trackingMode[p]}
+                                            onChange={(e) =>
+                                                setSettings({
+                                                    ...settings,
+                                                    trackingMode: {
+                                                        ...settings.trackingMode,
+                                                        [p]: e.target.value as TrackingMode,
+                                                    },
+                                                })
+                                            }
+                                        >
+                                            {getModeOptionsForPlatform(p).map((o) => (
+                                                <option key={o.value} value={o.value}>
+                                                    {o.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                    {settings.schedule.enabled && (
+                                        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-100">
+                                            <ScheduleCap
+                                                label="Evening cap"
+                                                minutes={settings.schedule.eveningLimits[p]}
+                                                locked={isDailyLocked(p)}
+                                                onChange={(m) =>
+                                                    setSettings({
+                                                        ...settings,
+                                                        schedule: {
+                                                            ...settings.schedule,
+                                                            eveningLimits: {
+                                                                ...settings.schedule.eveningLimits,
+                                                                [p]: m,
+                                                            },
+                                                        },
+                                                    })
+                                                }
+                                            />
+                                            <ScheduleCap
+                                                label="Weekend cap"
+                                                minutes={settings.schedule.weekendLimits[p]}
+                                                locked={isDailyLocked(p)}
+                                                onChange={(m) =>
+                                                    setSettings({
+                                                        ...settings,
+                                                        schedule: {
+                                                            ...settings.schedule,
+                                                            weekendLimits: {
+                                                                ...settings.schedule.weekendLimits,
+                                                                [p]: m,
+                                                            },
+                                                        },
+                                                    })
+                                                }
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
             </section>
 
             <section className="space-y-4">
@@ -154,18 +229,19 @@ export const SettingsForm = () => {
                             })
                         }
                     />
-                    Enable stricter caps on evenings and weekends
+                    Stricter caps on evenings and weekends
                 </label>
                 {settings.schedule.enabled && (
-                    <div className="space-y-4 pl-1 border-l-2 border-gray-200 ml-1">
-                        <div className="flex gap-4 flex-wrap">
-                            <label className="text-sm">
-                                Evening from{' '}
+                    <div className="space-y-3 pl-1 border-l-2 border-gray-200 ml-1 text-sm">
+                        <p className="text-gray-600">{describeEveningWindow(settings.schedule)}</p>
+                        <div className="flex flex-wrap gap-4 items-center">
+                            <label>
+                                From{' '}
                                 <input
                                     type="number"
                                     min={0}
                                     max={23}
-                                    className="w-14 border rounded px-2 py-1"
+                                    className="w-14 border rounded px-2 py-1 ml-1"
                                     value={settings.schedule.eveningStartHour}
                                     onChange={(e) =>
                                         setSettings({
@@ -176,13 +252,15 @@ export const SettingsForm = () => {
                                             },
                                         })
                                     }
-                                />{' '}
-                                to{' '}
+                                />
+                            </label>
+                            <label>
+                                To{' '}
                                 <input
                                     type="number"
                                     min={0}
                                     max={23}
-                                    className="w-14 border rounded px-2 py-1"
+                                    className="w-14 border rounded px-2 py-1 ml-1"
                                     value={settings.schedule.eveningEndHour}
                                     onChange={(e) =>
                                         setSettings({
@@ -197,51 +275,9 @@ export const SettingsForm = () => {
                             </label>
                         </div>
                         <p className="text-xs text-gray-500">
-                            During overlapping evening + weekend, the lower cap applies. 0 = use
-                            base daily limit.
+                            0 on a per-site evening/weekend cap uses the base daily limit. When both
+                            apply, the lower cap wins.
                         </p>
-                        <h3 className="text-sm font-semibold">Evening caps (minutes)</h3>
-                        {TRACKED_PLATFORMS.map((p) => (
-                            <LimitRow
-                                key={`ev-${p}`}
-                                platform={p}
-                                minutes={settings.schedule.eveningLimits[p]}
-                                locked={isDailyLocked(p)}
-                                onChange={(m) =>
-                                    setSettings({
-                                        ...settings,
-                                        schedule: {
-                                            ...settings.schedule,
-                                            eveningLimits: {
-                                                ...settings.schedule.eveningLimits,
-                                                [p]: m,
-                                            },
-                                        },
-                                    })
-                                }
-                            />
-                        ))}
-                        <h3 className="text-sm font-semibold">Weekend caps (minutes)</h3>
-                        {TRACKED_PLATFORMS.map((p) => (
-                            <LimitRow
-                                key={`we-${p}`}
-                                platform={p}
-                                minutes={settings.schedule.weekendLimits[p]}
-                                locked={isDailyLocked(p)}
-                                onChange={(m) =>
-                                    setSettings({
-                                        ...settings,
-                                        schedule: {
-                                            ...settings.schedule,
-                                            weekendLimits: {
-                                                ...settings.schedule.weekendLimits,
-                                                [p]: m,
-                                            },
-                                        },
-                                    })
-                                }
-                            />
-                        ))}
                     </div>
                 )}
             </section>
@@ -249,24 +285,12 @@ export const SettingsForm = () => {
             <section className="space-y-2">
                 <h2 className="text-lg font-bold text-gray-900">Cooldown</h2>
                 <p className="text-sm text-gray-500">
-                    After a block, you cannot revisit the site for this many minutes.
+                    After a block, revisit is prevented for this long (blocked page shown).
                 </p>
-                <div className="flex items-center gap-2">
-                    <input
-                        type="number"
-                        min={1}
-                        max={120}
-                        className="w-20 border rounded-lg px-2 py-2 font-mono"
-                        value={settings.cooldownMinutes}
-                        onChange={(e) =>
-                            setSettings({
-                                ...settings,
-                                cooldownMinutes: parseInt(e.target.value, 10) || 15,
-                            })
-                        }
-                    />
-                    <span className="text-sm text-gray-500">minutes</span>
-                </div>
+                <DurationInput
+                    totalMinutes={settings.cooldownMinutes}
+                    onChange={(m) => setSettings({ ...settings, cooldownMinutes: m || 15 })}
+                />
             </section>
 
             <button
@@ -282,23 +306,23 @@ export const SettingsForm = () => {
     );
 };
 
-function LimitRow({
-    platform,
-    minutes,
+function LimitField({
+    label,
+    totalMinutes,
     locked,
     lockUntil,
     onChange,
 }: {
-    platform: Platform;
-    minutes: number;
+    label: string;
+    totalMinutes: number;
     locked?: boolean;
     lockUntil?: number;
     onChange: (minutes: number) => void;
 }) {
     return (
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-                <span className="capitalize font-medium text-gray-800">{platform}</span>
+                <p className="text-sm font-medium text-gray-800">{label}</p>
                 {locked && lockUntil && (
                     <p className="text-xs text-amber-700 flex items-center gap-1 mt-0.5">
                         <Lock size={12} />
@@ -306,45 +330,33 @@ function LimitRow({
                     </p>
                 )}
             </div>
-            <div className="flex items-center gap-2">
-                <input
-                    type="number"
-                    min={0}
-                    className="w-20 p-2 border border-gray-300 rounded-lg text-right font-mono text-sm"
-                    value={minutes}
-                    onChange={(e) => onChange(parseInt(e.target.value, 10) || 0)}
-                />
-                <span className="text-sm text-gray-500">min</span>
-            </div>
+            <DurationInput totalMinutes={totalMinutes} onChange={onChange} disabled={locked} />
         </div>
     );
 }
 
-function ModeSelect({
-    platform,
-    value,
-    options,
+function ScheduleCap({
+    label,
+    minutes,
+    locked,
     onChange,
 }: {
-    platform: Platform;
-    value: TrackingMode;
-    options: { value: TrackingMode; label: string }[];
-    onChange: (v: TrackingMode) => void;
+    label: string;
+    minutes: number;
+    locked?: boolean;
+    onChange: (minutes: number) => void;
 }) {
     return (
-        <label className="block text-sm">
-            <span className="capitalize font-medium text-gray-800">{platform}</span>
-            <select
-                className="mt-1 w-full border border-gray-300 rounded-lg p-2"
-                value={value}
-                onChange={(e) => onChange(e.target.value as TrackingMode)}
-            >
-                {options.map((o) => (
-                    <option key={o.value} value={o.value}>
-                        {o.label}
-                    </option>
-                ))}
-            </select>
+        <label className="text-xs block">
+            <span className="text-gray-600">{label}</span>
+            <input
+                type="number"
+                min={0}
+                disabled={locked}
+                className="mt-1 w-full border rounded p-2 font-mono disabled:opacity-50"
+                value={minutes}
+                onChange={(e) => onChange(parseInt(e.target.value, 10) || 0)}
+            />
         </label>
     );
 }

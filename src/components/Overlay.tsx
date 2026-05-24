@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Timer } from 'lucide-react';
 import { getLimitState } from '../content/limitGuard';
+import { useStorageListener, isUsageOrSettingsKey } from '../hooks/useStorageListener';
 import { AppSettings, Platform } from '../types';
 import { StorageService } from '../storage';
 
@@ -15,58 +16,44 @@ export const Overlay = ({ platform = 'youtube' }: OverlayProps) => {
     const [effectiveDaily, setEffectiveDaily] = useState(0);
     const [progress, setProgress] = useState<number | null>(null);
 
+    const syncFromStorage = useCallback(async () => {
+        const usage = await StorageService.getTodayUsage();
+        const currentSettings = await StorageService.getSettings();
+        setTime(usage.byPlatform[platform] || 0);
+        setSettings(currentSettings);
+
+        const host = document.getElementById('focus-overlay-host');
+        const session = parseInt(host?.dataset.sessionSeconds || '0', 10);
+        setSessionSeconds(session);
+
+        const state = await getLimitState(platform, session);
+        setEffectiveDaily(state.effectiveDailyLimit);
+        if (state.effectiveDailyLimit > 0) {
+            setProgress(
+                Math.min(100, Math.round((state.dailyUsage / state.effectiveDailyLimit) * 100))
+            );
+        } else {
+            setProgress(null);
+        }
+    }, [platform]);
+
     useEffect(() => {
-        let localTime = 0;
+        syncFromStorage();
+    }, [syncFromStorage]);
 
-        const refresh = async () => {
-            const usage = await StorageService.getTodayUsage();
-            const currentSettings = await StorageService.getSettings();
-            const storedTime = usage.byPlatform[platform] || 0;
+    useStorageListener(syncFromStorage, isUsageOrSettingsKey);
 
-            if (Math.abs(storedTime - localTime) > 5) {
-                setTime(storedTime);
-                localTime = storedTime;
-            }
-            setSettings(currentSettings);
-
-            const host = document.getElementById('focus-overlay-host');
-            const session = parseInt(host?.dataset.sessionSeconds || '0', 10);
-            setSessionSeconds(session);
-
-            const state = await getLimitState(platform, session);
-            setEffectiveDaily(state.effectiveDailyLimit);
-            if (state.effectiveDailyLimit > 0) {
-                setProgress(
-                    Math.min(100, Math.round((state.dailyUsage / state.effectiveDailyLimit) * 100))
-                );
-            } else {
-                setProgress(null);
-            }
-        };
-
+    useEffect(() => {
         const tick = () => {
             const host = document.getElementById('focus-overlay-host');
             const isActive = host?.dataset.isActive === 'true';
             const session = parseInt(host?.dataset.sessionSeconds || '0', 10);
             setSessionSeconds(session);
-
-            if (isActive) {
-                setTime((t) => {
-                    localTime = t + 1;
-                    return t + 1;
-                });
-            }
+            if (isActive) setTime((t) => t + 1);
         };
-
-        refresh();
-        const fetchInterval = setInterval(refresh, 2000);
-        const tickInterval = setInterval(tick, 1000);
-
-        return () => {
-            clearInterval(fetchInterval);
-            clearInterval(tickInterval);
-        };
-    }, [platform]);
+        const id = setInterval(tick, 1000);
+        return () => clearInterval(id);
+    }, []);
 
     if (!settings) return null;
 
@@ -100,7 +87,7 @@ export const Overlay = ({ platform = 'youtube' }: OverlayProps) => {
             {effectiveDaily > 0 && (
                 <p className="text-[10px] text-gray-500 mb-1">
                     Cap {formatTime(effectiveDaily)}
-                    {settings.schedule.enabled ? ' (schedule active)' : ''}
+                    {settings.schedule.enabled ? ' (schedule)' : ''}
                 </p>
             )}
 

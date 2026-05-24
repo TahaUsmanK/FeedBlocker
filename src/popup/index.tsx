@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ExternalLink } from 'lucide-react';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { Dashboard } from './Dashboard';
 import '../index.css';
 
@@ -24,7 +25,9 @@ const Popup = () => {
             </div>
 
             <div className="flex-1 p-4 overflow-y-auto">
-                <Dashboard />
+                <ErrorBoundary fallbackTitle="Dashboard failed to load">
+                    <Dashboard />
+                </ErrorBoundary>
             </div>
 
             <div className="p-3 border-t border-gray-100 bg-gray-50 text-center">

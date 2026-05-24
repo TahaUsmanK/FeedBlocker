@@ -1,13 +1,29 @@
 import { ALL_TRACKED_HOSTS, hostToPlatform } from '../lib/platforms/registry';
 import { StorageService } from '../storage';
+import { setBlockState } from '../storage/blockState';
+
+import { Platform } from '../types';
+
+function blockTab(tabId: number, platform: Platform, until: number) {
+    void setBlockState({
+        platform,
+        reason: 'cooldown',
+        until,
+        blockedAt: Date.now(),
+    });
+    chrome.tabs.update(tabId, { url: chrome.runtime.getURL('blocked.html') });
+}
 
 export function setupNavigationGuard() {
     chrome.webNavigation.onCommitted.addListener(async (details) => {
         if (details.frameId !== 0) return;
 
+        const url = details.url;
+        if (url.includes('blocked.html')) return;
+
         let hostname: string;
         try {
-            hostname = new URL(details.url).hostname;
+            hostname = new URL(url).hostname;
         } catch {
             return;
         }
@@ -19,8 +35,8 @@ export function setupNavigationGuard() {
 
         await StorageService.clearExpiredCooldowns();
         const until = await StorageService.getCooldownUntil(platform);
-        if (until > Date.now() && !details.url.startsWith('about:')) {
-            chrome.tabs.update(details.tabId, { url: 'about:blank' });
+        if (until > Date.now()) {
+            blockTab(details.tabId, platform, until);
         }
     });
 }

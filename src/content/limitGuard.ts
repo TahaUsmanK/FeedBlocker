@@ -1,9 +1,10 @@
 import { evaluateLimits } from '../lib/limits';
 import { StorageService } from '../storage';
 import { LimitCheckResult, Platform } from '../types';
-import { forceBlankPage } from '../utils/blankPage';
+import { redirectToBlockPage } from '../utils/blockPage';
 import { SESSION_IDLE_RESET_MS } from '../lib/tracking/session';
 import { showWarningToast } from '../components/toastHost';
+import { nextMidnightTimestamp } from '../lib/dates';
 
 const warned = { daily: false, session: false };
 
@@ -44,23 +45,28 @@ export async function enforceLimits(platform: Platform, sessionSeconds: number):
         showWarningToast(platform, `~${Math.ceil(remaining / 60)} min left this session`);
     }
 
-    if (!state.blocked) return;
+    if (!state.blocked || !state.reason) return;
 
     if (state.reason === 'cooldown') {
-        forceBlankPage();
+        await redirectToBlockPage(platform, 'cooldown', state.cooldownUntil);
         return;
     }
 
     const settings = await StorageService.getSettings();
+    let until = state.cooldownUntil;
 
     if (state.reason === 'daily') {
         await StorageService.setDailyLock(platform);
+        until = nextMidnightTimestamp();
     } else if (state.reason === 'session') {
-        await StorageService.setSessionLock(platform, Date.now() + SESSION_IDLE_RESET_MS);
+        const sessionUntil = Date.now() + SESSION_IDLE_RESET_MS;
+        await StorageService.setSessionLock(platform, sessionUntil);
+        until = Math.max(until, sessionUntil);
     }
 
+    const cooldownUntil = Date.now() + settings.cooldownMinutes * 60 * 1000;
     await StorageService.startCooldown(platform, settings.cooldownMinutes);
-    forceBlankPage();
+    await redirectToBlockPage(platform, state.reason, Math.max(until, cooldownUntil));
 }
 
 export function startLimitGuard(platform: Platform) {

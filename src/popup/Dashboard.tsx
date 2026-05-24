@@ -1,25 +1,27 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Activity, Clock, BarChart3 } from 'lucide-react';
 import { StorageService } from '../storage';
 import { DailyUsage, TRACKED_PLATFORMS } from '../types';
+import { useStorageListener, isUsageOrSettingsKey } from '../hooks/useStorageListener';
 
 export const Dashboard = () => {
     const [usage, setUsage] = useState<DailyUsage | null>(null);
     const [weekly, setWeekly] = useState<DailyUsage[]>([]);
 
-    useEffect(() => {
-        const load = async () => {
-            const [data, wky] = await Promise.all([
-                StorageService.getTodayUsage(),
-                StorageService.getWeeklyStats(),
-            ]);
-            setUsage(data);
-            setWeekly(wky);
-        };
-        load();
-        const interval = setInterval(load, 5000);
-        return () => clearInterval(interval);
+    const load = useCallback(async () => {
+        const [data, wky] = await Promise.all([
+            StorageService.getTodayUsage(),
+            StorageService.getWeeklyStats(),
+        ]);
+        setUsage(data);
+        setWeekly(wky);
     }, []);
+
+    useEffect(() => {
+        load();
+    }, [load]);
+
+    useStorageListener(load, isUsageOrSettingsKey);
 
     const formatTime = (seconds: number) => {
         const h = Math.floor(seconds / 3600);
@@ -64,8 +66,8 @@ export const Dashboard = () => {
                 </div>
             </div>
 
-            <div className="space-y-2">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2 sticky top-0 bg-white py-1">
                     <Activity size={14} /> By site
                 </h3>
                 {TRACKED_PLATFORMS.map((p) => (
