@@ -2,14 +2,7 @@ import React, { useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import '../index.css';
 
-// Logo mark (inline SVG, no external dep)
-const LogoMark = ({ size = 48 }: { size?: number }) => (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <circle cx="16" cy="16" r="13" stroke="currentColor" strokeWidth="2.5" />
-        <path d="M16 16 L16 3 A13 13 0 0 1 27.26 22.5 Z" fill="currentColor" opacity="0.85" />
-        <circle cx="16" cy="16" r="2" fill="currentColor" />
-    </svg>
-);
+import { Logo } from '../components/Logo';
 
 const STEPS = [
     {
@@ -68,7 +61,7 @@ const OnboardingPage = () => {
             }}>
                 {/* Logo */}
                 <div style={{ color: 'var(--c-accent)', marginBottom: '24px', display: 'flex', justifyContent: 'center' }}>
-                    <LogoMark />
+                    <Logo size={48} />
                 </div>
 
                 {/* Step dots */}

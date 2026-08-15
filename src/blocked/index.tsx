@@ -32,14 +32,7 @@ function reasonDetail(reason: BlockState['reason']): string {
     }
 }
 
-// Minimal SVG logo mark
-const LogoMark = () => (
-    <svg width="40" height="40" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <circle cx="16" cy="16" r="13" stroke="currentColor" strokeWidth="2.5" />
-        <path d="M16 16 L16 3 A13 13 0 0 1 27.26 22.5 Z" fill="currentColor" opacity="0.85" />
-        <circle cx="16" cy="16" r="2" fill="currentColor" />
-    </svg>
-);
+import { Logo } from '../components/Logo';
 
 const BlockedPage = () => {
     const [state, setState] = useState<BlockState | null>(null);
@@ -89,8 +82,8 @@ const BlockedPage = () => {
     return (
         <main className="blocked-root">
             <article className="blocked-card" role="main" aria-label={`${label} is blocked`}>
-                <div className="blocked-logo" aria-hidden="true">
-                    <LogoMark />
+                <div className="blocked-logo" aria-hidden="true" style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+                    <Logo size={40} />
                 </div>
 
                 <div className="blocked-platform">{label}</div>
