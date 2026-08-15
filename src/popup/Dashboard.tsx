@@ -28,7 +28,6 @@ export const Dashboard = () => {
     const [weekly, setWeekly] = useState<DailyUsage[]>([]);
 
     const load = useCallback(async () => {
-        chrome.runtime.sendMessage({ type: 'FLUSH_USAGE' }).catch(() => { });
         const [data, wky] = await Promise.all([
             StorageService.getTodayUsage(),
             StorageService.getWeeklyStats(),
@@ -37,7 +36,11 @@ export const Dashboard = () => {
         setWeekly(wky);
     }, []);
 
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => {
+        chrome.runtime.sendMessage({ type: 'FLUSH_USAGE' }).catch(() => { });
+        void load();
+    }, [load]);
+
     useStorageListener(load, isUsageOrSettingsKey);
 
     if (!usage) return <div className="dash-loading" aria-busy="true">Loading…</div>;

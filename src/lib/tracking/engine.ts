@@ -8,7 +8,7 @@ import { StorageService } from '../../storage';
 import { Platform, TrackingMode, VideoType } from '../../types';
 import { updateOverlayHost } from './overlayHost';
 import { ActivityTracker } from './activity';
-import { hasPlayingVideo, hasVisiblePlayingVideo, startMediaObserver, stopMediaObserver, hasVideoElement } from './media';
+import { hasPlayingVideo, hasVisiblePlayingVideo, startMediaObserver, stopMediaObserver, hasVideoElement, pruneMediaState } from './media';
 import { SessionTracker } from './session';
 import { watchSpaNavigation } from './spa';
 
@@ -25,6 +25,7 @@ export class TrackingEngine {
     private lastContentId = '';
     private tickTimer: number | null = null;
     private unwatchNav: (() => void) | null = null;
+    private storageListener: ((changes: Record<string, chrome.storage.StorageChange>, area: string) => void) | null = null;
 
     constructor(platform: Platform) {
         this.platform = platform;
@@ -36,16 +37,18 @@ export class TrackingEngine {
         const settings = await StorageService.getSettings();
         this.trackingMode = settings.trackingMode[this.platform] ?? this.definition.defaultMode;
 
-        chrome.storage.onChanged.addListener((changes, area) => {
+        this.storageListener = (changes, area) => {
             if (area === 'local' && changes.settings) {
                 StorageService.getSettings().then((s) => {
                     this.trackingMode = s.trackingMode[this.platform] ?? this.definition.defaultMode;
                 });
             }
-        });
+        };
+        chrome.storage.onChanged.addListener(this.storageListener);
 
         this.unwatchNav = watchSpaNavigation(() => {
             this.lastContentId = '';
+            pruneMediaState();
         });
 
         startMediaObserver();
@@ -58,6 +61,11 @@ export class TrackingEngine {
         if (this.tickTimer !== null) clearInterval(this.tickTimer);
         this.unwatchNav?.();
         stopMediaObserver();
+        this.activity.destroy();
+        if (this.storageListener) {
+            chrome.storage.onChanged.removeListener(this.storageListener);
+            this.storageListener = null;
+        }
     }
 
     private getContext() {
@@ -127,6 +135,7 @@ export class TrackingEngine {
                     platform: this.platform,
                     videoType: content.videoType,
                     isActive: true,
+                    sessionSeconds,
                 },
             });
         } catch (e) {

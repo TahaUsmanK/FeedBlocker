@@ -204,7 +204,7 @@ export const PLATFORM_BY_ID = Object.fromEntries(
 export function detectPlatform(hostname: string): Platform | null {
     const host = hostname.toLowerCase();
     for (const def of PLATFORM_REGISTRY) {
-        if (def.hosts.some((h) => host === h || host.endsWith(`.${h}`) || host.includes(h))) {
+        if (def.hosts.some((h) => host === h || host.endsWith(`.${h}`))) {
             return def.id;
         }
     }

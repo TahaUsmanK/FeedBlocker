@@ -7,6 +7,7 @@ export class ActivityTracker {
     private lastActiveTime = Date.now();
     private lastMouse = 0;
     private lastScroll = 0;
+    private eventCleanups: Array<[string, EventListener]> = [];
 
     constructor() {
         const bump = () => {
@@ -43,6 +44,14 @@ export class ActivityTracker {
         for (const [name, handler] of events) {
             window.addEventListener(name, handler, { passive: true, capture: true });
         }
+        this.eventCleanups = events;
+    }
+
+    destroy(): void {
+        for (const [name, handler] of this.eventCleanups) {
+            window.removeEventListener(name, handler, { capture: true });
+        }
+        this.eventCleanups = [];
     }
 
     msSinceActivity(): number {

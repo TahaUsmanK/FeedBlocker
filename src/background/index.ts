@@ -1,4 +1,4 @@
-import { ALL_TRACKED_HOSTS } from '../lib/platforms/registry';
+import { detectPlatform } from '../lib/platforms/registry';
 import { StorageService } from '../storage';
 import { HelperData, Platform, TRACKED_PLATFORMS } from '../types';
 import { handleAlarm, setupAlarms } from './alarms';
@@ -6,17 +6,25 @@ import { addPendingSeconds, flushPendingUsage, recoverPending } from './pendingU
 import { setupNavigationGuard } from './navigation';
 import { updateBadge } from './badge';
 
+let workerInitPromise: Promise<void> | null = null;
+
 /**
  * Runs on every service-worker wake (install, startup, alarm, message, navigation).
  * MV3 SWs are ephemeral — we must re-initialize state each time they start.
+ * Guarded by workerInitPromise to avoid concurrent duplicate startup runs.
  */
-async function onWorkerStart() {
-    // Recover any unflushed seconds from a previously-killed SW before doing anything else
-    await recoverPending();
-    await StorageService.migrateLegacyUsageIfNeeded();
-    await StorageService.rolloverDayIfNeeded();
-    await setupAlarms();
-    await updateBadge();
+async function onWorkerStart(): Promise<void> {
+    if (!workerInitPromise) {
+        workerInitPromise = (async () => {
+            // Recover any unflushed seconds from a previously-killed SW before doing anything else
+            await recoverPending();
+            await StorageService.migrateLegacyUsageIfNeeded();
+            await StorageService.rolloverDayIfNeeded();
+            await setupAlarms();
+            await updateBadge();
+        })();
+    }
+    return workerInitPromise;
 }
 
 /**
@@ -46,11 +54,23 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 setupNavigationGuard();
 
-chrome.runtime.onMessage.addListener((message: { type: string; payload?: unknown }) => {
+/** Track the last timestamp (in whole seconds) a heartbeat was recorded per platform */
+const lastHeartbeatSec: Partial<Record<Platform, number>> = {};
+
+import { enforceLimitsInBackground } from './enforcement';
+
+chrome.runtime.onMessage.addListener((message: { type: string; payload?: unknown }, sender) => {
     if (message.type === 'HEARTBEAT') {
-        const data = message.payload as HelperData;
+        const data = message.payload as HelperData & { sessionSeconds?: number };
         if (data?.isActive && data.platform && TRACKED_PLATFORMS.includes(data.platform)) {
-            addPendingSeconds(data.platform, 1);
+            const currentSec = Math.floor(Date.now() / 1000);
+            // Deduplicate across multiple open tabs for the same platform in the same second
+            if (lastHeartbeatSec[data.platform] !== currentSec) {
+                lastHeartbeatSec[data.platform] = currentSec;
+                addPendingSeconds(data.platform, 1);
+            }
+            // Always evaluate limits so warnings and blocks can be dispatched immediately
+            void enforceLimitsInBackground(data.platform, data.sessionSeconds || 0, sender.tab?.id);
         }
         return;
     }
@@ -81,7 +101,7 @@ chrome.webNavigation.onCommitted.addListener((details) => {
     if (details.frameId !== 0) return;
     try {
         const hostname = new URL(details.url).hostname;
-        if (ALL_TRACKED_HOSTS.some((h) => hostname.includes(h))) {
+        if (detectPlatform(hostname)) {
             void flushPendingUsage();
         }
     } catch {

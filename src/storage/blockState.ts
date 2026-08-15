@@ -7,10 +7,9 @@ export interface BlockState {
     blockedAt: number;
 }
 
-const BLOCK_STATE_KEY = 'lastBlock';
 
 export async function setBlockState(state: BlockState): Promise<void> {
-    await chrome.storage.session.set({ [BLOCK_STATE_KEY]: state });
+    await chrome.storage.session.set({ [`lastBlock_${state.platform}`]: state });
 }
 
 /**
@@ -38,9 +37,17 @@ export async function getBlockState(): Promise<BlockState | null> {
 
     // Fallback: read from session storage (may need a few retries on cold load)
     for (let attempt = 0; attempt < 5; attempt++) {
-        const result = await chrome.storage.session.get(BLOCK_STATE_KEY);
-        const state = result[BLOCK_STATE_KEY] as BlockState | undefined;
-        if (state) return state;
+        const result = await chrome.storage.session.get(null);
+        let latestState: BlockState | null = null;
+        for (const [key, value] of Object.entries(result)) {
+            if (key.startsWith('lastBlock_')) {
+                const state = value as BlockState;
+                if (!latestState || state.blockedAt > latestState.blockedAt) {
+                    latestState = state;
+                }
+            }
+        }
+        if (latestState) return latestState;
         if (attempt < 4) await new Promise((r) => setTimeout(r, 80));
     }
 

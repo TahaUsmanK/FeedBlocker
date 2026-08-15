@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getLimitState } from '../content/limitGuard';
+import { evaluateLimits } from '../lib/limits';
 import { useStorageListener, isUsageOrSettingsKey } from '../hooks/useStorageListener';
 import { AppSettings, Platform } from '../types';
 import { StorageService } from '../storage';
@@ -46,9 +46,11 @@ export const Overlay = ({ platform = 'youtube' }: OverlayProps) => {
     const dragOffset = useRef({ x: 0, y: 0 });
 
     const syncFromStorage = useCallback(async () => {
-        chrome.runtime.sendMessage({ type: 'FLUSH_USAGE' }).catch(() => { });
-        const usage = await StorageService.getTodayUsage();
-        const currentSettings = await StorageService.getSettings();
+        const [usage, currentSettings, cooldownUntil] = await Promise.all([
+            StorageService.getTodayUsage(),
+            StorageService.getSettings(),
+            StorageService.getCooldownUntil(platform),
+        ]);
         setTime(usage.byPlatform[platform] || 0);
         setSettings(currentSettings);
 
@@ -56,8 +58,7 @@ export const Overlay = ({ platform = 'youtube' }: OverlayProps) => {
         const session = parseInt(host?.dataset.sessionSeconds || '0', 10);
         setSessionSeconds(session);
 
-        const state = getLimitState(platform, session);
-        if (!state) return;
+        const state = evaluateLimits(platform, currentSettings, usage.byPlatform[platform] || 0, session, cooldownUntil);
         if (state.effectiveDailyLimit > 0) {
             setProgress(
                 Math.min(100, Math.round((state.dailyUsage / state.effectiveDailyLimit) * 100))
@@ -67,7 +68,11 @@ export const Overlay = ({ platform = 'youtube' }: OverlayProps) => {
         }
     }, [platform]);
 
-    useEffect(() => { syncFromStorage(); }, [syncFromStorage]);
+    useEffect(() => {
+        chrome.runtime.sendMessage({ type: 'FLUSH_USAGE' }).catch(() => { });
+        void syncFromStorage();
+    }, [syncFromStorage]);
+
     useStorageListener(syncFromStorage, isUsageOrSettingsKey);
 
     // Optimistic tick (corrected on every storage sync)

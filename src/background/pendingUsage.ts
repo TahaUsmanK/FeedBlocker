@@ -19,6 +19,9 @@ const SESSION_KEY = 'pendingUsage';
 /** In-memory shadow of the session buffer — avoids an extra async read each heartbeat */
 let memory: Record<Platform, number> = emptyPlatformRecord(0);
 
+/** In-flight flush promise to prevent concurrent duplicate flushes */
+let flushPromise: Promise<void> | null = null;
+
 /** Write the current in-memory totals to chrome.storage.session (fire-and-forget) */
 function persistToSession(): void {
     chrome.storage.session.set({ [SESSION_KEY]: { ...memory } }).catch(() => {/* ignore */ });
@@ -26,16 +29,23 @@ function persistToSession(): void {
 
 /** Read the session buffer (handles missing key gracefully) */
 async function readFromSession(): Promise<Record<Platform, number>> {
-    const result = await chrome.storage.session.get(SESSION_KEY);
-    const stored = result[SESSION_KEY] as Record<Platform, number> | undefined;
-    if (!stored) return emptyPlatformRecord(0);
-    // Merge with empty record so every platform key is guaranteed present
-    return { ...emptyPlatformRecord(0), ...stored };
+    try {
+        const result = await chrome.storage.session.get(SESSION_KEY);
+        const stored = result[SESSION_KEY] as Record<Platform, number> | undefined;
+        if (!stored) return emptyPlatformRecord(0);
+        return { ...emptyPlatformRecord(0), ...stored };
+    } catch {
+        return emptyPlatformRecord(0);
+    }
 }
 
 /** Clear the session buffer */
 async function clearSession(): Promise<void> {
-    await chrome.storage.session.remove(SESSION_KEY);
+    try {
+        await chrome.storage.session.remove(SESSION_KEY);
+    } catch {
+        /* ignore */
+    }
 }
 
 /**
@@ -45,45 +55,60 @@ async function clearSession(): Promise<void> {
  */
 export function addPendingSeconds(platform: Platform, seconds: number): void {
     memory[platform] = (memory[platform] || 0) + seconds;
-    // Write-through: persist immediately so SW death cannot lose this data
     persistToSession();
+}
+
+/** Get the current pending seconds for a platform that haven't been flushed yet */
+export function getPendingSeconds(platform: Platform): number {
+    return memory[platform] || 0;
+}
+
+async function doFlush(): Promise<void> {
+    // Read whatever was saved in session storage
+    const sessionData = await readFromSession();
+
+    // Use Math.max, not sum: session storage is a near-exact mirror of memory
+    // (persisted on every heartbeat), so summing would double-count.
+    // On a cold SW boot, memory is 0 and sessionData has the real value.
+    // On a warm flush, memory has the real value and sessionData may lag slightly.
+    const delta = emptyPlatformRecord(0);
+    for (const p of TRACKED_PLATFORMS) {
+        delta[p] = Math.max(sessionData[p] || 0, memory[p] || 0);
+        memory[p] = 0;
+    }
+
+    // Clear session storage immediately so any new heartbeats write fresh counts
+    await clearSession();
+
+    const hasData = TRACKED_PLATFORMS.some((p) => delta[p] > 0);
+    if (!hasData) return;
+
+    // Apply the batch atomically to durable local storage
+    await StorageService.batchIncrementUsage(delta);
+    await StorageService.clearExpiredCooldowns();
 }
 
 /**
  * Flush all pending usage to durable chrome.storage.local.
- * Uses batchIncrementUsage for a single atomic read-modify-write.
+ * Thread-safe: concurrent calls reuse the existing in-flight flush promise.
  */
 export async function flushPendingUsage(): Promise<void> {
-    // Source of truth is session storage (survives SW kills)
-    const batch = await readFromSession();
-
-    const hasData = TRACKED_PLATFORMS.some((p) => (batch[p] || 0) > 0);
-    if (!hasData) return;
-
-    // Apply the batch atomically
-    await StorageService.batchIncrementUsage(batch);
-    await StorageService.clearExpiredCooldowns();
-
-    // Clear the session buffer now that data is safely in local storage
-    await clearSession();
-
-    // Reset the in-memory shadow to match
-    memory = emptyPlatformRecord(0);
+    if (flushPromise) {
+        return flushPromise;
+    }
+    flushPromise = doFlush();
+    try {
+        await flushPromise;
+    } finally {
+        flushPromise = null;
+    }
 }
 
 /**
  * Called at SW boot to recover any unflushed pending seconds from a
- * previously-killed service worker. Must run before resuming normal operation.
+ * previously-killed service worker.
  */
 export async function recoverPending(): Promise<void> {
-    const recovered = await readFromSession();
-    const hasData = TRACKED_PLATFORMS.some((p) => (recovered[p] || 0) > 0);
-    if (!hasData) return;
-
-    // Restore in-memory shadow so subsequent heartbeats build on top of it
-    memory = recovered;
-
-    // Flush immediately to durable storage
     await flushPendingUsage();
 }
 
@@ -91,3 +116,4 @@ export function resetPending(): void {
     memory = emptyPlatformRecord(0);
     chrome.storage.session.remove(SESSION_KEY).catch(() => { });
 }
+

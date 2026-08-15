@@ -1,4 +1,4 @@
-import { ALL_TRACKED_HOSTS, hostToPlatform } from '../lib/platforms/registry';
+import { hostToPlatform } from '../lib/platforms/registry';
 import { StorageService } from '../storage';
 import { setBlockState } from '../storage/blockState';
 import { Platform } from '../types';
@@ -41,15 +41,27 @@ export function setupNavigationGuard() {
             return;
         }
 
-        if (!ALL_TRACKED_HOSTS.some((h) => hostname.includes(h))) return;
-
         const platform = hostToPlatform(hostname);
         if (!platform) return;
 
-        await StorageService.clearExpiredCooldowns();
-        const until = await StorageService.getCooldownUntil(platform);
-        if (until > Date.now()) {
-            blockTab(details.tabId, platform, 'cooldown', until);
+        const [locks, cooldownUntil] = await Promise.all([
+            StorageService.getLimitLocks(),
+            StorageService.getCooldownUntil(platform)
+        ]);
+        const now = Date.now();
+
+        if (StorageService.isPlatformDailyLocked(platform, locks, now)) {
+            blockTab(details.tabId, platform, 'daily', locks.daily[platform] || 0);
+            return;
+        }
+
+        if (StorageService.isPlatformSessionLocked(platform, locks, now)) {
+            blockTab(details.tabId, platform, 'session', locks.session[platform] || 0);
+            return;
+        }
+
+        if (cooldownUntil > now) {
+            blockTab(details.tabId, platform, 'cooldown', cooldownUntil);
         }
     });
 }

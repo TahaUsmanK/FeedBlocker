@@ -15,7 +15,10 @@ const MIN_VISIBLE_RATIO = 0.2;
 const playingVideos = new Set<HTMLVideoElement>();
 
 function onPlay(e: Event) {
-    playingVideos.add(e.currentTarget as HTMLVideoElement);
+    const video = e.currentTarget as HTMLVideoElement;
+    if (isVideoActivelyPlaying(video)) {
+        playingVideos.add(video);
+    }
 }
 function onPause(e: Event) {
     playingVideos.delete(e.currentTarget as HTMLVideoElement);
@@ -26,6 +29,18 @@ function onEnded(e: Event) {
 
 const attachedVideos = new WeakSet<HTMLVideoElement>();
 
+function isVideoActivelyPlaying(video: HTMLVideoElement): boolean {
+    if (!video.isConnected) {
+        playingVideos.delete(video);
+        return false;
+    }
+    if (video.paused || video.ended || video.readyState < 2) {
+        playingVideos.delete(video);
+        return false;
+    }
+    return true;
+}
+
 function attachToVideo(video: HTMLVideoElement) {
     if (attachedVideos.has(video)) return;
     attachedVideos.add(video);
@@ -34,9 +49,12 @@ function attachToVideo(video: HTMLVideoElement) {
     video.addEventListener('playing', onPlay, { passive: true });
     video.addEventListener('pause', onPause, { passive: true });
     video.addEventListener('ended', onEnded, { passive: true });
+    video.addEventListener('emptied', onPause, { passive: true });
+    video.addEventListener('abort', onPause, { passive: true });
+    video.addEventListener('error', onPause, { passive: true });
 
     // Sync current state — video may already be playing when we attach
-    if (!video.paused && !video.ended && video.readyState >= 2 && video.currentTime > 0) {
+    if (isVideoActivelyPlaying(video) && video.currentTime > 0) {
         playingVideos.add(video);
     }
 }
@@ -55,10 +73,12 @@ const observer = new MutationObserver((mutations) => {
                 node.querySelectorAll<HTMLVideoElement>('video').forEach(attachToVideo);
             }
         }
-        // A removed video is no longer playing
+        // Clean up removed videos directly or within removed subtrees
         for (const node of m.removedNodes) {
             if (node instanceof HTMLVideoElement) {
                 playingVideos.delete(node);
+            } else if (node instanceof Element) {
+                node.querySelectorAll<HTMLVideoElement>('video').forEach((v) => playingVideos.delete(v));
             }
         }
     }
@@ -72,6 +92,12 @@ export function startMediaObserver() {
 export function stopMediaObserver() {
     observer.disconnect();
     playingVideos.clear();
+}
+
+export function pruneMediaState(): void {
+    for (const video of Array.from(playingVideos)) {
+        isVideoActivelyPlaying(video);
+    }
 }
 
 function isElementVisible(el: HTMLVideoElement): boolean {
@@ -90,27 +116,35 @@ function isElementVisible(el: HTMLVideoElement): boolean {
 
 /**
  * Is ANY tracked video currently playing and substantially visible?
- * O(cached set) — no DOM query.
+ * Validates active playback state and prunes stale elements.
  */
 export function hasVisiblePlayingVideo(): boolean {
-    for (const video of playingVideos) {
-        if (isElementVisible(video)) return true;
+    for (const video of Array.from(playingVideos)) {
+        if (isVideoActivelyPlaying(video) && isElementVisible(video)) {
+            return true;
+        }
     }
     return false;
 }
 
 /**
  * Is ANY tracked video currently playing (even off-screen / background tab)?
- * O(cached set) — no DOM query.
+ * Validates active playback state and prunes stale elements.
  */
 export function hasPlayingVideo(): boolean {
-    return playingVideos.size > 0;
+    for (const video of Array.from(playingVideos)) {
+        if (isVideoActivelyPlaying(video)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**
- * Is there a <video> element on this page at all (playing or paused)?
+ * Is there a connected <video> element on this page at all (playing or paused)?
  * Used to distinguish "no video on page" from "video is paused".
  */
 export function hasVideoElement(): boolean {
-    return document.querySelector('video') !== null;
+    const video = document.querySelector('video');
+    return video !== null && video.isConnected;
 }
