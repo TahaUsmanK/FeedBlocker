@@ -96,11 +96,13 @@ export const Overlay = ({ platform = 'youtube' }: OverlayProps) => {
         return () => window.removeEventListener('keydown', handler);
     }, []);
 
-    // Drag handlers (pointer events — works on touch + mouse)
+    const dragHasMoved = useRef(false);
+
     const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-        // Only drag on left-click / primary touch, not on close button
-        if ((e.target as HTMLElement).closest('button')) return;
+        // Only drag on left-click / primary touch, not on close button (unless minimized)
+        if (visible && (e.target as HTMLElement).closest('button')) return;
         dragging.current = true;
+        dragHasMoved.current = false;
         dragOffset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         e.preventDefault();
@@ -108,10 +110,11 @@ export const Overlay = ({ platform = 'youtube' }: OverlayProps) => {
 
     const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
         if (!dragging.current) return;
+        dragHasMoved.current = true;
         const W = window.innerWidth;
         const H = window.innerHeight;
-        const WIDGET_W = 152;
-        const WIDGET_H = 80;
+        const WIDGET_W = visible ? 152 : 32;
+        const WIDGET_H = visible ? 80 : 32;
         const newX = Math.max(0, Math.min(W - WIDGET_W, e.clientX - dragOffset.current.x));
         const newY = Math.max(0, Math.min(H - WIDGET_H, e.clientY - dragOffset.current.y));
         setPos({ x: newX, y: newY });
@@ -122,9 +125,14 @@ export const Overlay = ({ platform = 'youtube' }: OverlayProps) => {
         if (!dragging.current) return;
         dragging.current = false;
         savePosition(pos.x, pos.y);
+        
+        // If it was a click without dragging on the minimized state, restore the overlay
+        if (!visible && !dragHasMoved.current) {
+            setVisible(true);
+        }
     };
 
-    if (!settings || !visible) return null;
+    if (!settings) return null;
 
     const sessionLimit = settings.sessionLimits[platform] || 0;
 
@@ -144,6 +152,46 @@ export const Overlay = ({ platform = 'youtube' }: OverlayProps) => {
                 : progress >= 80
                     ? 'hsl(38 95% 55%)'
                     : 'hsl(220 65% 60%)';
+
+    if (!visible) {
+        return (
+            <div
+                role="button"
+                aria-label="Show ShortsInsight Overlay"
+                title="Show ShortsInsight"
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                style={{
+                    position: 'fixed',
+                    left: `${pos.x}px`,
+                    top: `${pos.y}px`,
+                    zIndex: 2147483647,
+                    background: 'rgba(10,15,28,0.7)',
+                    color: 'rgba(232,236,244,0.6)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '50%',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                    padding: '8px',
+                    width: '32px',
+                    height: '32px',
+                    cursor: dragging.current ? 'grabbing' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backdropFilter: 'blur(4px)',
+                    touchAction: 'none',
+                    userSelect: 'none',
+                    boxSizing: 'border-box'
+                }}
+            >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+            </div>
+        );
+    }
 
     return (
         <div
