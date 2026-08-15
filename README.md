@@ -1,117 +1,122 @@
-# FocusOverlay
+<div align="center">
+  <img src="docs/assets/banner.jpg" alt="ShortsInsight Banner" width="100%">
 
-**Hard limits for distracting sites.** Track real active time, set daily and session caps, and get sent to a blank page when time is up — no snooze, no “just five more minutes.”
+  # FocusOverlay 🛡️
 
-Built as a Chrome Extension (Manifest V3). All data stays on your device.
+  **Hard limits for distracting sites.**  
+  Track real active time, set daily and session caps, and get sent to a blank page when time is up. No snooze, no “just five more minutes.”
 
-> This repo is named **ShortsInsight**; the extension product name is **FocusOverlay**.
+  [![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Manifest_V3-4285F4?style=for-the-badge&logo=google-chrome&logoColor=white)](https://chrome.google.com/webstore)
+  [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
+  [![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen?style=for-the-badge&logo=github)](https://github.com/TahaUsmanK/Insights)
+</div>
 
----
+<br />
 
-## Why FocusOverlay?
-
-Most screen-time tools nudge you with soft reminders. FocusOverlay is built for people who want **enforcement**:
-
-- Counts **active** time (idle-aware, video-aware), not just “tab open”
-- **Daily** budgets and **session** bursts, per site
-- **Stricter caps** on evenings and weekends
-- **Cooldown** after a block so you cannot instantly reload
-- **Limit lock** — you cannot raise a cap while that limit period is active
-- **No bypass** after a block (`about:blank`, no snooze button)
+> 💡 **Note:** This repository is named **ShortsInsight**, but the extension product name is **FocusOverlay**.
 
 ---
 
-## Supported sites
+## 🎯 Why FocusOverlay?
 
-| Site | Tracking modes |
-|------|----------------|
-| YouTube | Entire site · Shorts only · Video playing only |
-| Instagram | Entire site · Reels only · Video playing only |
-| X (Twitter) | Entire site · Video playing only |
-| TikTok | Entire site · Video playing only |
-| Facebook | Entire site · Reels only · Video playing only |
-| Reddit | Entire site · Video playing only |
-| LinkedIn | Entire site · Video playing only |
-| Twitch | Entire site · Video playing only *(default)* |
-| Pinterest | Entire site · Video playing only |
+Most screen-time tools nudge you with soft reminders. FocusOverlay is built for people who need **strict enforcement**:
 
-Modes are configured per site in the options page.
+- ⏱️ **Counts Active Time**: Tracks real interaction (idle-aware, video-aware), not just "tab open".
+- 📊 **Budgets & Bursts**: Set daily limits and session burst caps per site.
+- 🌙 **Scheduled Limits**: Enforce stricter caps on evenings and weekends.
+- ⏳ **Mandatory Cooldowns**: Forces a cooldown after a block so you cannot instantly reload.
+- 🔒 **Limit Lock**: Prevents you from raising a cap while that limit period is active.
+- 🛑 **No Bypass**: Redirects you to `about:blank` when time is up. There is no snooze button.
 
 ---
 
-## Features
+## 🌐 Supported Sites
 
-### Time tracking
+Configure tracking modes per site in the options page to suit your specific focus needs.
 
-- **Active time** — mouse, keyboard, scroll, touch, and visibility; 30s idle threshold
-- **Session time** — continuous active time in one visit; resets after 5 minutes idle
-- **Video detection** — counts playback when a video is substantially visible (≥20% in viewport)
-- **SPA-aware** — detects route changes on single-page apps (History API + polling)
-- **Unified engine** — one tracker pipeline for all sites via a platform registry
-
-### Limits
-
-- **Daily limits** — per site, in minutes (`0` = unlimited)
-- **Session limits** — max continuous active time before a forced break
-- **Scheduled limits** — lower evening and/or weekend caps (strictest applicable cap wins)
-- **80% warnings** — toast when you approach a limit (no way to extend time)
-
-### Enforcement
-
-- Tab redirects to **`about:blank`** when daily or session limit is hit
-- **Cooldown** (default 15 min) blocks revisiting the site via navigation guard
-- Enforcement runs in the **content script** and **background** (not only the overlay UI)
-
-### Settings & data
-
-- **Popup** — quick usage summary and link to full settings
-- **Options page** — all limits, modes, schedule, cooldown, export, reset
-- **Export CSV** — historical usage by day and platform
-- **Reset today** — clear current day stats only
-- **Limit lock** — cannot *increase* limits until the period ends (midnight for daily, ~5 min for session)
-
-### Privacy
-
-- No accounts, no cloud, no analytics server
-- Data in `chrome.storage.local` only
-- System fonts on injected UI (no Google Fonts on third-party pages)
+| Site | Tracking Modes |
+| :--- | :--- |
+| **YouTube** | Entire site · Shorts only · Video playing only |
+| **Instagram** | Entire site · Reels only · Video playing only |
+| **X (Twitter)** | Entire site · Video playing only |
+| **TikTok** | Entire site · Video playing only |
+| **Facebook** | Entire site · Reels only · Video playing only |
+| **Reddit** | Entire site · Video playing only |
+| **LinkedIn** | Entire site · Video playing only |
+| **Twitch** | Entire site · Video playing only *(default)* |
+| **Pinterest** | Entire site · Video playing only |
 
 ---
 
-## Quick start
+## ✨ Features
+
+### ⏱️ Time Tracking
+- **Active time**: Tracks mouse, keyboard, scroll, touch, and visibility; features a 30s idle threshold.
+- **Session time**: Measures continuous active time in one visit; resets after 5 minutes of idle time.
+- **Video detection**: Counts playback when a video is substantially visible (≥20% in viewport).
+- **SPA-aware**: Detects route changes on single-page apps (History API + polling).
+- **Unified engine**: One robust tracker pipeline for all sites via a platform registry.
+
+### 🚧 Limits
+- **Daily limits**: Per site, in minutes (`0` = unlimited).
+- **Session limits**: Maximum continuous active time before a forced break.
+- **Scheduled limits**: Lower evening and/or weekend caps (the strictest applicable cap wins).
+- **80% warnings**: A non-intrusive toast notification when you approach a limit (no way to extend time).
+
+### 🛑 Enforcement
+- Tabs are redirected to **`about:blank`** when a daily or session limit is hit.
+- **Cooldown** (default 15 min) blocks revisiting the site via a robust navigation guard.
+- Enforcement runs in the **Service Worker** to prevent bypasses and race conditions.
+
+### ⚙️ Settings & Data
+- **Popup**: Quick usage summary and a link to full settings.
+- **Options page**: Comprehensive control over all limits, modes, schedules, cooldowns, exports, and resets.
+- **Export CSV**: Historical usage grouped by day and platform.
+- **Reset today**: Clear current day stats only.
+
+### 🔒 Privacy First
+- **No accounts**, no cloud sync, no analytics servers.
+- Data stays in `chrome.storage.local` exclusively.
+- Uses **System fonts** on injected UI to prevent third-party font tracking.
+
+---
+
+## 🚀 Quick Start
 
 ### Requirements
-
 - [Node.js](https://nodejs.org/) 18+
 - Google Chrome or Chromium-based browser
 
-### Install from source
+### Install from Source
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/ShortsInsight.git
+# Clone the repository
+git clone https://github.com/TahaUsmanK/Insights.git ShortsInsight
 cd ShortsInsight
+
+# Install dependencies
 npm install
+
+# Build for production
 npm run build
 ```
 
-Load the extension in Chrome:
-
+**Load the extension in Chrome:**
 1. Open `chrome://extensions`
 2. Enable **Developer mode**
 3. Click **Load unpacked**
 4. Select the `dist/` folder
 
-### Configure
-
+### Configuration
 1. Click the extension icon → **Open full settings**
 2. Set **daily** and **session** limits (minutes) per site
-3. Optional: enable **scheduled limits**, change **tracking mode**, adjust **cooldown**
+3. *Optional:* Enable **scheduled limits**, change **tracking mode**, adjust **cooldown**
 4. Click **Save settings**
-5. Visit a supported site — a small timer appears top-right
+5. Visit a supported site — a small timer will appear in the top-right corner.
 
 ---
 
-## How tracking works
+## 🛠️ How Tracking Works
 
 ```mermaid
 flowchart LR
@@ -127,14 +132,14 @@ flowchart LR
 
 1. A **content script** runs on supported domains and classifies the page (Shorts, Reels, feed, etc.).
 2. Each second, the **tracking engine** decides if you are *active* for your chosen mode.
-3. Active seconds are sent to the **service worker** and flushed to storage every 5 seconds.
-4. **Limit guard** compares usage to effective limits (including schedule).
+3. Active seconds are sent to the **Service Worker** and flushed to storage atomically.
+4. **Limit guard** evaluates usage against effective limits (including schedules).
 5. At **80%**, a warning toast appears once.
-6. At **100%**, the tab goes blank, cooldown starts, and limit increases are locked.
+6. At **100%**, the tab is blocked, a cooldown initiates, and limit increases are locked.
 
 ---
 
-## Development
+## 💻 Development
 
 ```bash
 # Install dependencies
@@ -149,12 +154,10 @@ npm run build
 # Preview build output
 npm run preview
 ```
+*Note: After `npm run dev` or `npm run build`, reload the extension on `chrome://extensions` when you change code.*
 
-After `npm run dev` or `npm run build`, reload the extension on `chrome://extensions` when you change code.
-
-### Project structure
-
-```
+### Project Structure
+```text
 ├── manifest.json          # Extension manifest (MV3)
 ├── index.html             # Browser action popup
 ├── options.html           # Full settings page
@@ -172,74 +175,61 @@ After `npm run dev` or `npm run build`, reload the extension on `chrome://extens
     └── options/           # Options page UI
 ```
 
-### Adding a new site
+### Adding a New Site
+1. Add the platform id to `TRACKED_PLATFORMS` in `src/types.ts`.
+2. Register hosts and a `classify()` function in `src/lib/platforms/registry.ts`.
+3. Add URL patterns to `host_permissions` and `content_scripts.matches` in `manifest.json`.
 
-1. Add the platform id to `TRACKED_PLATFORMS` in `src/types.ts`
-2. Register hosts and a `classify()` function in `src/lib/platforms/registry.ts`
-3. Add URL patterns to `host_permissions` and `content_scripts.matches` in `manifest.json`
-
-See [docs/PDD.md](docs/PDD.md) for full product and architecture detail.
+*(See [docs/PDD.md](docs/PDD.md) for full product and architecture details.)*
 
 ---
 
-## Tech stack
+## 🧰 Tech Stack
 
 | Layer | Technology |
 |-------|------------|
-| Extension | Chrome Manifest V3 |
-| UI | React 18, TypeScript, Tailwind CSS |
-| Build | Vite 5, [@crxjs/vite-plugin](https://crxjs.dev/vite-plugin) |
-| Icons | [Lucide](https://lucide.dev/) |
-| Storage | `chrome.storage.local` |
+| **Extension** | Chrome Manifest V3 |
+| **UI** | React 18, TypeScript, Tailwind CSS |
+| **Build** | Vite 5, [@crxjs/vite-plugin](https://crxjs.dev/vite-plugin) |
+| **Icons** | [Lucide](https://lucide.dev/) |
+| **Storage** | `chrome.storage.local` |
 
 ---
 
-## Limitations
+## 🚧 Limitations
 
 FocusOverlay is a browser extension, not OS-level parental control. A motivated user can still:
-
 - Disable or uninstall the extension
 - Clear extension storage
 - Use another browser or device
 
-Daily totals may lag storage by up to ~5 seconds (the overlay still ticks live while you are active). Scheduled limits use your **local timezone**.
+*Note: Scheduled limits use your **local timezone**.*
 
 ---
 
-## Roadmap
+## 🗺️ Roadmap
 
 - [ ] Firefox MV3 build
 - [ ] Configurable warning threshold (default 80%)
 - [ ] Optional `chrome.notifications` for limit warnings
 - [ ] Encrypted backup export
 
-Ideas and PRs welcome.
+*Ideas and PRs are welcome!*
 
 ---
 
-## Contributing
+## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/my-change`)
-3. Commit your changes (`git commit -m 'Add something useful'`)
-4. Push and open a Pull Request
+1. **Fork** the repository.
+2. **Create** a feature branch (`git checkout -b feature/my-change`).
+3. **Commit** your changes (`git commit -m 'Add something useful'`).
+4. **Push** and open a Pull Request.
 
-Please keep changes focused and match existing TypeScript/React patterns. Run `npm run build` before submitting.
-
----
-
-## Documentation
-
-- **[Product Design Document (PDD)](docs/PDD.md)** — requirements, data model, algorithms, test plan
+*Please keep changes focused and match existing TypeScript/React patterns. Run `npm run build` before submitting.*
 
 ---
 
-## Acknowledgments
-
-Built to help reclaim attention from algorithmic feeds — one enforced limit at a time.
-
----
-
-<p align="center">
-  <sub>If FocusOverlay helps you, consider starring the repo.</sub>
-</p>
+<div align="center">
+  Built to help reclaim attention from algorithmic feeds — one enforced limit at a time. <br/>
+  <sub>If FocusOverlay helps you, consider starring the repo. ⭐</sub>
+</div>
