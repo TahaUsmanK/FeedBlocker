@@ -8,13 +8,13 @@ const STEPS = [
     {
         id: 'welcome',
         title: 'Take back your time.',
-        body: 'FocusOverlay tracks how long you spend on YouTube, Instagram, TikTok, and 6 more sites — then cuts you off when you hit your limit. No account. No cloud. All data stays on your machine.',
+        body: 'FeedBlocker tracks how long you spend on YouTube, Instagram, TikTok, and 6 more sites — then cuts you off when you hit your limit. No account. No cloud. All data stays on your machine.',
         cta: 'Get started →',
     },
     {
         id: 'pin',
         title: 'Pin the extension.',
-        body: 'Click the puzzle icon in your Chrome toolbar, then pin FocusOverlay. You\'ll see today\'s total minutes right in the toolbar badge.',
+        body: 'Click the puzzle icon in your Chrome toolbar, then pin FeedBlocker. You\'ll see today\'s total minutes right in the toolbar badge.',
         cta: 'Done, continue →',
     },
     {
@@ -124,7 +124,7 @@ const OnboardingPage = () => {
                 </button>
 
                 <p style={{ marginTop: '20px', fontSize: '12px', color: 'var(--c-subtle)' }}>
-                    FocusOverlay — all data stored locally. No account required.
+                    FeedBlocker — all data stored locally. No account required.
                 </p>
             </article>
         </main>

@@ -1,6 +1,6 @@
 {
     "manifest_version": 3,
-    "name": "FocusOverlay",
+    "name": "FeedBlocker",
     "version": "1.4.0",
     "description": "Track and limit time on social and video sites.",
     "action": {

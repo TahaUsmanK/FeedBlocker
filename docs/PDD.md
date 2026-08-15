@@ -1,16 +1,16 @@
-# FocusOverlay — Product Design Document (PDD)
+# FeedBlocker — Product Design Document (PDD)
 
 **Version:** 1.1.0  
 **Last updated:** 2026-05-24  
-**Product name:** FocusOverlay  
-**Repository folder:** ShortsInsight  
+**Product name:** FeedBlocker  
+**Repository folder:** FeedBlocker  
 **Platform:** Chrome Extension (Manifest V3)
 
 ---
 
 ## 1. Executive summary
 
-FocusOverlay is a browser extension that tracks how long a user actively spends on YouTube, Instagram, and X (Twitter). It enforces user-defined **daily** and **session** time limits, optional **scheduled stricter caps** (evenings/weekends), and a **post-block cooldown** that prevents immediately returning to a site. When a limit is exceeded, the tab is redirected to `about:blank` with **no snooze or override**.
+FeedBlocker is a browser extension that tracks how long a user actively spends on YouTube, Instagram, and X (Twitter). It enforces user-defined **daily** and **session** time limits, optional **scheduled stricter caps** (evenings/weekends), and a **post-block cooldown** that prevents immediately returning to a site. When a limit is exceeded, the tab is redirected to `about:blank` with **no snooze or override**.
 
 All usage data is stored locally in `chrome.storage.local`. There is no backend, no accounts, and no mock data.
 

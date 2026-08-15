@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="docs/assets/banner.jpg" alt="ShortsInsight Banner" width="100%">
+  <img src="docs/assets/banner.jpg" alt="FeedBlocker Banner" width="100%">
 
-  # FocusOverlay 🛡️
+  # FeedBlocker 🛡️
 
   **Hard limits for distracting sites.**  
   Track real active time, set daily and session caps, and get sent to a blank page when time is up. No snooze, no “just five more minutes.”
@@ -13,13 +13,11 @@
 
 <br />
 
-> 💡 **Note:** This repository is named **ShortsInsight**, but the extension product name is **FocusOverlay**.
-
 ---
 
-## 🎯 Why FocusOverlay?
+## 🎯 Why FeedBlocker?
 
-Most screen-time tools nudge you with soft reminders. FocusOverlay is built for people who need **strict enforcement**:
+Most screen-time tools nudge you with soft reminders. FeedBlocker is built for people who need **strict enforcement**:
 
 - ⏱️ **Counts Active Time**: Tracks real interaction (idle-aware, video-aware), not just "tab open".
 - 📊 **Budgets & Bursts**: Set daily limits and session burst caps per site.
@@ -91,8 +89,8 @@ Configure tracking modes per site in the options page to suit your specific focu
 
 ```bash
 # Clone the repository
-git clone https://github.com/TahaUsmanK/Insights.git ShortsInsight
-cd ShortsInsight
+git clone https://github.com/TahaUsmanK/Insights.git FeedBlocker
+cd FeedBlocker
 
 # Install dependencies
 npm install
@@ -198,7 +196,7 @@ npm run preview
 
 ## 🚧 Limitations
 
-FocusOverlay is a browser extension, not OS-level parental control. A motivated user can still:
+FeedBlocker is a browser extension, not OS-level parental control. A motivated user can still:
 - Disable or uninstall the extension
 - Clear extension storage
 - Use another browser or device
@@ -231,5 +229,5 @@ FocusOverlay is a browser extension, not OS-level parental control. A motivated 
 
 <div align="center">
   Built to help reclaim attention from algorithmic feeds — one enforced limit at a time. <br/>
-  <sub>If FocusOverlay helps you, consider starring the repo. ⭐</sub>
+  <sub>If FeedBlocker helps you, consider starring the repo. ⭐</sub>
 </div>

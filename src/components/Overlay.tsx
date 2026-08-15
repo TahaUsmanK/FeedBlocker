@@ -8,7 +8,7 @@ interface OverlayProps {
     platform?: Platform;
 }
 
-const POSITION_KEY = 'focusOverlayPosition';
+const POSITION_KEY = 'FeedBlockerPosition';
 
 function loadSavedPosition(): { x: number; y: number } | null {
     try {

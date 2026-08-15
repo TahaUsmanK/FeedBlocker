@@ -17,7 +17,7 @@ export class ErrorBoundary extends Component<Props, State> {
     }
 
     componentDidCatch(error: Error, info: ErrorInfo) {
-        console.error('FocusOverlay UI error:', error, info.componentStack);
+        console.error('FeedBlocker UI error:', error, info.componentStack);
     }
 
     render() {

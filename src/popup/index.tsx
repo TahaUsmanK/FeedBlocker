@@ -14,7 +14,7 @@ const Popup = () => {
             <header className="popup-header">
                 <div className="popup-logo">
                     <Logo size={20} className="popup-logo-mark" />
-                    <span className="popup-logo-name">FocusOverlay</span>
+                    <span className="popup-logo-name">FeedBlocker</span>
                 </div>
                 <button
                     type="button"

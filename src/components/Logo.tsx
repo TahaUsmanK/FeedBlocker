@@ -6,7 +6,7 @@ export interface LogoProps {
 }
 
 /**
- * FocusOverlay Logo
+ * FeedBlocker Logo
  * 
  * Design: Combines a shield (protecting your time) with a central 
  * focal point or eye (representing focus and awareness).

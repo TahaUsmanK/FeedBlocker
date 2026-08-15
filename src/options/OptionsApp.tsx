@@ -25,7 +25,7 @@ export const OptionsApp = () => {
 
     const exportCsv = async () => {
         const csv = await StorageService.exportUsageCsv();
-        downloadCsv(`focusoverlay-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+        downloadCsv(`FeedBlocker-${new Date().toISOString().slice(0, 10)}.csv`, csv);
     };
 
     const resetToday = async () => {
@@ -39,7 +39,7 @@ export const OptionsApp = () => {
         <div className="options-root">
             <header className="options-header">
                 <Logo size={22} className="options-logo-mark" />
-                <span className="options-title">FocusOverlay</span>
+                <span className="options-title">FeedBlocker</span>
                 <span className="options-subtitle">All data is stored locally — nothing leaves your browser.</span>
             </header>
 
