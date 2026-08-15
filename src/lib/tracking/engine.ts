@@ -8,7 +8,7 @@ import { StorageService } from '../../storage';
 import { Platform, TrackingMode, VideoType } from '../../types';
 import { updateOverlayHost } from './overlayHost';
 import { ActivityTracker } from './activity';
-import { hasPlayingVideo, hasVisiblePlayingVideo } from './media';
+import { hasPlayingVideo, hasVisiblePlayingVideo, startMediaObserver, stopMediaObserver, hasVideoElement } from './media';
 import { SessionTracker } from './session';
 import { watchSpaNavigation } from './spa';
 
@@ -48,6 +48,8 @@ export class TrackingEngine {
             this.lastContentId = '';
         });
 
+        startMediaObserver();
+
         this.tick();
         this.tickTimer = window.setInterval(() => this.tick(), 1000);
     }
@@ -55,6 +57,7 @@ export class TrackingEngine {
     stop(): void {
         if (this.tickTimer !== null) clearInterval(this.tickTimer);
         this.unwatchNav?.();
+        stopMediaObserver();
     }
 
     private getContext() {
@@ -86,7 +89,13 @@ export class TrackingEngine {
             case 'all':
             default:
                 if (this.definition.backgroundPlayback) {
-                    return engaged || (visible && mediaPlaying);
+                    // Critical fix: If there IS a video on the page, and it's paused, 
+                    // DO NOT count as active even if the user is engaged with comments etc.
+                    // If no video exists (e.g. homepage), just use engagement.
+                    if (hasVideoElement()) {
+                        return mediaPlaying;
+                    }
+                    return engaged;
                 }
                 return engaged;
         }
