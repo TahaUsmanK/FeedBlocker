@@ -146,6 +146,28 @@ export const StorageService = {
         });
     },
 
+    /**
+     * Atomic batch increment — reads the day once, applies all platform deltas,
+     * then writes once. Much safer than N sequential incrementUsage calls when
+     * the service worker may be killed between writes.
+     */
+    async batchIncrementUsage(increments: Partial<Record<Platform, number>>): Promise<void> {
+        const nonZero = Object.entries(increments).filter(([, v]) => (v ?? 0) > 0);
+        if (nonZero.length === 0) return;
+
+        await withStorageLock(async () => {
+            await this.rolloverDayIfNeeded();
+            const today = localDateString();
+            const day = await readDay(today);
+            for (const [platform, seconds] of nonZero) {
+                const p = platform as Platform;
+                day.total += seconds!;
+                day.byPlatform[p] = (day.byPlatform[p] || 0) + seconds!;
+            }
+            await writeDay(day);
+        });
+    },
+
     async incrementVideoCount(platform: Platform, count: number = 1): Promise<void> {
         await withStorageLock(async () => {
             await this.rolloverDayIfNeeded();

@@ -2,14 +2,30 @@ import { ALL_TRACKED_HOSTS } from '../lib/platforms/registry';
 import { StorageService } from '../storage';
 import { HelperData, Platform, TRACKED_PLATFORMS } from '../types';
 import { handleAlarm, setupAlarms } from './alarms';
-import { addPendingSeconds, flushPendingUsage } from './pendingUsage';
+import { addPendingSeconds, flushPendingUsage, recoverPending } from './pendingUsage';
 import { setupNavigationGuard } from './navigation';
 
+/**
+ * Runs on every service-worker wake (install, startup, alarm, message, navigation).
+ * MV3 SWs are ephemeral — we must re-initialize state each time they start.
+ */
 async function onWorkerStart() {
-    setupAlarms();
+    // Recover any unflushed seconds from a previously-killed SW before doing anything else
+    await recoverPending();
     await StorageService.migrateLegacyUsageIfNeeded();
     await StorageService.rolloverDayIfNeeded();
+    await setupAlarms();
 }
+
+/**
+ * MV3 CRITICAL: call onWorkerStart at the TOP LEVEL, not just inside event
+ * listeners. This ensures initialization runs on every SW wake — including
+ * alarm wakes and message wakes that don't fire onInstalled/onStartup.
+ *
+ * chrome.runtime.onInstalled / onStartup are kept for legacy safety but
+ * the top-level call is the reliable entry point.
+ */
+void onWorkerStart();
 
 chrome.runtime.onInstalled.addListener(() => {
     void onWorkerStart();
@@ -29,7 +45,7 @@ chrome.runtime.onMessage.addListener((message: { type: string; payload?: unknown
     if (message.type === 'HEARTBEAT') {
         const data = message.payload as HelperData;
         if (data?.isActive && data.platform && TRACKED_PLATFORMS.includes(data.platform)) {
-            void addPendingSeconds(data.platform, 1);
+            addPendingSeconds(data.platform, 1);
         }
         return;
     }

@@ -17,6 +17,7 @@ export const Overlay = ({ platform = 'youtube' }: OverlayProps) => {
     const [progress, setProgress] = useState<number | null>(null);
 
     const syncFromStorage = useCallback(async () => {
+        chrome.runtime.sendMessage({ type: 'FLUSH_USAGE' }).catch(() => {});
         const usage = await StorageService.getTodayUsage();
         const currentSettings = await StorageService.getSettings();
         setTime(usage.byPlatform[platform] || 0);
@@ -27,6 +28,7 @@ export const Overlay = ({ platform = 'youtube' }: OverlayProps) => {
         setSessionSeconds(session);
 
         const state = await getLimitState(platform, session);
+        if (!state) return;
         setEffectiveDaily(state.effectiveDailyLimit);
         if (state.effectiveDailyLimit > 0) {
             setProgress(

@@ -9,6 +9,7 @@ export const Dashboard = () => {
     const [weekly, setWeekly] = useState<DailyUsage[]>([]);
 
     const load = useCallback(async () => {
+        chrome.runtime.sendMessage({ type: 'FLUSH_USAGE' }).catch(() => {});
         const [data, wky] = await Promise.all([
             StorageService.getTodayUsage(),
             StorageService.getWeeklyStats(),
