@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "FocusOverlay",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "description": "Track and limit time on social and video sites.",
     "action": {
         "default_popup": "index.html"
@@ -33,11 +33,18 @@
                 "*://*.pinterest.com/*",
                 "*://pin.it/*"
             ],
-            "js": ["src/content/index.tsx"],
+            "js": [
+                "src/content/index.tsx"
+            ],
             "run_at": "document_idle"
         }
     ],
-    "permissions": ["storage", "alarms", "webNavigation", "tabs"],
+    "permissions": [
+        "storage",
+        "alarms",
+        "webNavigation",
+        "tabs"
+    ],
     "host_permissions": [
         "*://*.youtube.com/*",
         "*://youtu.be/*",
@@ -54,5 +61,16 @@
         "*://*.twitch.tv/*",
         "*://*.pinterest.com/*",
         "*://pin.it/*"
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "onboarding.html",
+                "blocked.html"
+            ],
+            "matches": [
+                "<all_urls>"
+            ]
+        }
     ]
 }

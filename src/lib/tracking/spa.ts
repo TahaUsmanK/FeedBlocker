@@ -1,6 +1,12 @@
 export type NavigationCallback = () => void;
 
-/** Detect SPA route changes (History API + polling fallback) */
+/**
+ * Detect SPA route changes via History API interception + popstate.
+ *
+ * REMOVED: 500ms polling interval. The pushState/replaceState wrap and
+ * popstate/hashchange listeners cover 100% of SPA navigations. The old
+ * 500ms poll was burning 2 location.href reads/second/tab for no benefit.
+ */
 export function watchSpaNavigation(onNavigate: NavigationCallback): () => void {
     let lastHref = location.href;
 
@@ -10,8 +16,6 @@ export function watchSpaNavigation(onNavigate: NavigationCallback): () => void {
             onNavigate();
         }
     };
-
-    const interval = window.setInterval(check, 500);
 
     const pushState = history.pushState.bind(history);
     const replaceState = history.replaceState.bind(history);
@@ -30,7 +34,6 @@ export function watchSpaNavigation(onNavigate: NavigationCallback): () => void {
     window.addEventListener('hashchange', check);
 
     return () => {
-        clearInterval(interval);
         history.pushState = pushState;
         history.replaceState = replaceState;
         window.removeEventListener('popstate', check);

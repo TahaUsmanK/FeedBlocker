@@ -16,36 +16,41 @@ function formatCountdown(untilMs: number): string {
 
 function reasonLabel(reason: BlockState['reason']): string {
     switch (reason) {
-        case 'daily':
-            return 'Daily limit reached';
-        case 'session':
-            return 'Session limit reached';
-        case 'cooldown':
-            return 'Cooldown active';
-        default:
-            return 'Limit reached';
+        case 'daily': return "You've hit your daily limit";
+        case 'session': return "Session limit reached";
+        case 'cooldown': return "Cooldown in progress";
+        default: return "Access paused";
     }
 }
 
 function reasonDetail(reason: BlockState['reason']): string {
     switch (reason) {
-        case 'daily':
-            return 'You have used all of your allowed active time for today on this site. Limits reset at local midnight.';
-        case 'session':
-            return 'You hit your continuous session cap. Take a break before starting a new session.';
-        case 'cooldown':
-            return 'You cannot return to this site until the cooldown ends.';
-        default:
-            return '';
+        case 'daily': return 'Your active time on this site has run out for today. Limits reset at midnight.';
+        case 'session': return 'You have been browsing continuously past your session cap. Take a real break.';
+        case 'cooldown': return 'A brief cooldown prevents immediate return. The timer below shows when access resumes.';
+        default: return '';
     }
 }
 
+// Minimal SVG logo mark
+const LogoMark = () => (
+    <svg width="40" height="40" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="16" cy="16" r="13" stroke="currentColor" strokeWidth="2.5" />
+        <path d="M16 16 L16 3 A13 13 0 0 1 27.26 22.5 Z" fill="currentColor" opacity="0.85" />
+        <circle cx="16" cy="16" r="2" fill="currentColor" />
+    </svg>
+);
+
 const BlockedPage = () => {
     const [state, setState] = useState<BlockState | null>(null);
+    const [loading, setLoading] = useState(true);
     const [countdown, setCountdown] = useState('');
 
     useEffect(() => {
-        getBlockState().then(setState);
+        getBlockState().then((s) => {
+            setState(s);
+            setLoading(false);
+        });
     }, []);
 
     useEffect(() => {
@@ -56,10 +61,25 @@ const BlockedPage = () => {
         return () => clearInterval(id);
     }, [state]);
 
+    const openSettings = () => chrome.runtime.openOptionsPage();
+
+    if (loading) {
+        return (
+            <main className="blocked-root">
+                <div className="blocked-card" style={{ color: 'var(--c-muted)' }}>Loading…</div>
+            </main>
+        );
+    }
+
     if (!state) {
         return (
-            <main className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-600">
-                Loading…
+            <main className="blocked-root">
+                <div className="blocked-card">
+                    <p style={{ color: 'var(--c-muted)', fontSize: '14px' }}>
+                        No block state found. You can{' '}
+                        <button className="link-btn" onClick={openSettings}>open settings</button>.
+                    </p>
+                </div>
             </main>
         );
     }
@@ -67,21 +87,28 @@ const BlockedPage = () => {
     const label = PLATFORM_BY_ID[state.platform]?.label ?? state.platform;
 
     return (
-        <main className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 p-6 font-sans">
-            <article className="max-w-md w-full bg-white rounded-2xl shadow-lg border border-gray-200 p-8 text-center">
-                <div className="w-14 h-14 mx-auto mb-5 rounded-full bg-amber-100 flex items-center justify-center text-2xl">
-                    ⏱
+        <main className="blocked-root">
+            <article className="blocked-card" role="main" aria-label={`${label} is blocked`}>
+                <div className="blocked-logo" aria-hidden="true">
+                    <LogoMark />
                 </div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">{reasonLabel(state.reason)}</h1>
-                <p className="text-sm text-gray-500 mb-6 capitalize">{label}</p>
-                <p className="text-gray-600 text-sm leading-relaxed mb-6">{reasonDetail(state.reason)}</p>
-                <div className="bg-gray-50 rounded-xl py-4 px-6 mb-6">
-                    <p className="text-xs uppercase tracking-wider text-gray-400 mb-1">Time remaining</p>
-                    <p className="text-3xl font-mono font-bold text-gray-900">{countdown}</p>
+
+                <div className="blocked-platform">{label}</div>
+                <h1 className="blocked-title">{reasonLabel(state.reason)}</h1>
+                <p className="blocked-detail">{reasonDetail(state.reason)}</p>
+
+                <div className="blocked-timer" aria-live="off" aria-atomic="true">
+                    <div className="blocked-timer-label">Resumes in</div>
+                    <output className="blocked-timer-value">{countdown}</output>
                 </div>
-                <p className="text-xs text-gray-400">
-                    FocusOverlay — no snooze. Limit increases are locked until this period ends.
-                </p>
+
+                <button
+                    type="button"
+                    className="blocked-settings-btn"
+                    onClick={openSettings}
+                >
+                    View usage &amp; settings
+                </button>
             </article>
         </main>
     );

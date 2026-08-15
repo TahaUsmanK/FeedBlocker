@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Timer } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getLimitState } from '../content/limitGuard';
 import { useStorageListener, isUsageOrSettingsKey } from '../hooks/useStorageListener';
 import { AppSettings, Platform } from '../types';
@@ -9,15 +8,45 @@ interface OverlayProps {
     platform?: Platform;
 }
 
+const POSITION_KEY = 'focusOverlayPosition';
+
+function loadSavedPosition(): { x: number; y: number } | null {
+    try {
+        const raw = localStorage.getItem(POSITION_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (typeof parsed.x === 'number' && typeof parsed.y === 'number') return parsed;
+        return null;
+    } catch {
+        return null;
+    }
+}
+
+function savePosition(x: number, y: number) {
+    try {
+        localStorage.setItem(POSITION_KEY, JSON.stringify({ x, y }));
+    } catch {
+        /* non-critical */
+    }
+}
+
 export const Overlay = ({ platform = 'youtube' }: OverlayProps) => {
     const [time, setTime] = useState(0);
     const [sessionSeconds, setSessionSeconds] = useState(0);
     const [settings, setSettings] = useState<AppSettings | null>(null);
-    const [effectiveDaily, setEffectiveDaily] = useState(0);
     const [progress, setProgress] = useState<number | null>(null);
+    const [visible, setVisible] = useState(true);
+
+    // Drag state
+    const saved = loadSavedPosition();
+    const [pos, setPos] = useState<{ x: number; y: number }>(
+        saved ?? { x: window.innerWidth - 160, y: 12 }
+    );
+    const dragging = useRef(false);
+    const dragOffset = useRef({ x: 0, y: 0 });
 
     const syncFromStorage = useCallback(async () => {
-        chrome.runtime.sendMessage({ type: 'FLUSH_USAGE' }).catch(() => {});
+        chrome.runtime.sendMessage({ type: 'FLUSH_USAGE' }).catch(() => { });
         const usage = await StorageService.getTodayUsage();
         const currentSettings = await StorageService.getSettings();
         setTime(usage.byPlatform[platform] || 0);
@@ -27,9 +56,8 @@ export const Overlay = ({ platform = 'youtube' }: OverlayProps) => {
         const session = parseInt(host?.dataset.sessionSeconds || '0', 10);
         setSessionSeconds(session);
 
-        const state = await getLimitState(platform, session);
+        const state = getLimitState(platform, session);
         if (!state) return;
-        setEffectiveDaily(state.effectiveDailyLimit);
         if (state.effectiveDailyLimit > 0) {
             setProgress(
                 Math.min(100, Math.round((state.dailyUsage / state.effectiveDailyLimit) * 100))
@@ -39,65 +67,159 @@ export const Overlay = ({ platform = 'youtube' }: OverlayProps) => {
         }
     }, [platform]);
 
-    useEffect(() => {
-        syncFromStorage();
-    }, [syncFromStorage]);
-
+    useEffect(() => { syncFromStorage(); }, [syncFromStorage]);
     useStorageListener(syncFromStorage, isUsageOrSettingsKey);
 
+    // Optimistic tick (corrected on every storage sync)
     useEffect(() => {
         const tick = () => {
             const host = document.getElementById('focus-overlay-host');
-            const isActive = host?.dataset.isActive === 'true';
             const session = parseInt(host?.dataset.sessionSeconds || '0', 10);
             setSessionSeconds(session);
-            if (isActive) setTime((t) => t + 1);
+            if (host?.dataset.isActive === 'true') setTime((t) => t + 1);
         };
         const id = setInterval(tick, 1000);
         return () => clearInterval(id);
     }, []);
 
-    if (!settings) return null;
+    // Keyboard: Escape dismisses
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setVisible(false);
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, []);
+
+    // Drag handlers (pointer events — works on touch + mouse)
+    const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        // Only drag on left-click / primary touch, not on close button
+        if ((e.target as HTMLElement).closest('button')) return;
+        dragging.current = true;
+        dragOffset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        e.preventDefault();
+    };
+
+    const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (!dragging.current) return;
+        const W = window.innerWidth;
+        const H = window.innerHeight;
+        const WIDGET_W = 152;
+        const WIDGET_H = 80;
+        const newX = Math.max(0, Math.min(W - WIDGET_W, e.clientX - dragOffset.current.x));
+        const newY = Math.max(0, Math.min(H - WIDGET_H, e.clientY - dragOffset.current.y));
+        setPos({ x: newX, y: newY });
+        e.preventDefault();
+    };
+
+    const onPointerUp = () => {
+        if (!dragging.current) return;
+        dragging.current = false;
+        savePosition(pos.x, pos.y);
+    };
+
+    if (!settings || !visible) return null;
 
     const sessionLimit = settings.sessionLimits[platform] || 0;
 
     const formatTime = (seconds: number) => {
-        const m = Math.floor(seconds / 60);
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
         const s = seconds % 60;
+        if (h > 0) return `${h}h ${m}m`;
         return `${m}:${s.toString().padStart(2, '0')}`;
     };
 
+    const barColor =
+        progress === null
+            ? 'hsl(220 65% 60%)'
+            : progress >= 100
+                ? 'hsl(0 72% 58%)'
+                : progress >= 80
+                    ? 'hsl(38 95% 55%)'
+                    : 'hsl(220 65% 60%)';
+
     return (
-        <div className="fixed top-4 right-4 z-[9999] bg-gray-900/95 text-white rounded-lg shadow-lg font-sans w-44 p-3">
-            <div className="flex items-center gap-2 mb-2">
-                <Timer size={14} className="text-blue-400 shrink-0" />
-                <span className="text-xs font-semibold text-gray-300">Today</span>
-                <span className="ml-auto font-mono text-sm font-bold text-blue-300">
+        <div
+            role="status"
+            aria-label={`${platform} usage: ${formatTime(time)} today`}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            style={{
+                position: 'fixed',
+                left: `${pos.x}px`,
+                top: `${pos.y}px`,
+                zIndex: 2147483647,
+                background: 'rgba(10,15,28,0.93)',
+                color: '#e8ecf4',
+                borderRadius: '10px',
+                boxShadow: '0 2px 16px rgba(0,0,0,0.5)',
+                fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif',
+                fontSize: '13px',
+                padding: '10px 12px',
+                width: '152px',
+                userSelect: 'none',
+                cursor: dragging.current ? 'grabbing' : 'grab',
+                touchAction: 'none',
+            }}
+        >
+            {/* Header row: label + close button */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'rgba(232,236,244,0.45)' }}>
+                    {platform.charAt(0).toUpperCase() + platform.slice(1)}
+                </span>
+                <button
+                    type="button"
+                    onClick={() => setVisible(false)}
+                    aria-label="Dismiss overlay"
+                    title="Dismiss (Esc)"
+                    style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'rgba(232,236,244,0.4)',
+                        cursor: 'pointer',
+                        padding: '0 0 0 6px',
+                        fontSize: '14px',
+                        lineHeight: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                    }}
+                >
+                    ×
+                </button>
+            </div>
+
+            {/* Today time */}
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '4px', marginBottom: sessionLimit > 0 ? '5px' : progress !== null ? '6px' : '0' }}>
+                <span style={{ color: 'rgba(232,236,244,0.5)', fontSize: '11px' }}>Today</span>
+                <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, fontSize: '15px', letterSpacing: '-0.01em' }}>
                     {formatTime(time)}
                 </span>
             </div>
 
+            {/* Session row */}
             {sessionLimit > 0 && (
-                <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs text-gray-400">Session</span>
-                    <span className="ml-auto font-mono text-xs text-gray-200">
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '4px', marginBottom: progress !== null ? '6px' : '0' }}>
+                    <span style={{ color: 'rgba(232,236,244,0.35)', fontSize: '10px' }}>Session</span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '12px', color: 'rgba(232,236,244,0.65)' }}>
                         {formatTime(sessionSeconds)}
                     </span>
                 </div>
             )}
 
-            {effectiveDaily > 0 && (
-                <p className="text-[10px] text-gray-500 mb-1">
-                    Cap {formatTime(effectiveDaily)}
-                    {settings.schedule.enabled ? ' (schedule)' : ''}
-                </p>
-            )}
-
+            {/* Progress bar */}
             {progress !== null && (
-                <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+                <div style={{ height: '3px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
                     <div
-                        className={`h-full rounded-full transition-all ${progress >= 80 ? 'bg-amber-500' : 'bg-blue-500'} ${progress >= 100 ? 'bg-red-500' : ''}`}
-                        style={{ width: `${progress}%` }}
+                        style={{
+                            height: '100%',
+                            width: `${progress}%`,
+                            background: barColor,
+                            borderRadius: '2px',
+                            transition: 'width 0.8s ease, background 0.5s ease',
+                        }}
                     />
                 </div>
             )}

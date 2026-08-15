@@ -1,43 +1,50 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { ExternalLink } from 'lucide-react';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { Dashboard } from './Dashboard';
 import '../index.css';
 
+// Minimal inline SVG logo mark (no external dependency)
+const LogoMark = ({ size = 20 }: { size?: number }) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox="0 0 32 32"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
+        className="popup-logo-mark"
+    >
+        <circle cx="16" cy="16" r="13" stroke="currentColor" strokeWidth="2.5" />
+        <path d="M16 16 L16 3 A13 13 0 0 1 27.26 22.5 Z" fill="currentColor" opacity="0.85" />
+        <circle cx="16" cy="16" r="2" fill="currentColor" />
+    </svg>
+);
+
 const Popup = () => {
-    const openOptions = () => {
-        chrome.runtime.openOptionsPage();
-    };
+    const openOptions = () => chrome.runtime.openOptionsPage();
 
     return (
-        <div className="w-80 bg-white min-h-[320px] flex flex-col font-sans text-gray-900">
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-                <h1 className="text-lg font-bold">FocusOverlay</h1>
+        <div className="popup-root">
+            <header className="popup-header">
+                <div className="popup-logo">
+                    <LogoMark />
+                    <span className="popup-logo-name">FocusOverlay</span>
+                </div>
                 <button
                     type="button"
+                    className="popup-settings-btn"
                     onClick={openOptions}
-                    className="text-xs text-blue-600 hover:text-blue-500 flex items-center gap-1 font-medium"
+                    aria-label="Open settings"
                 >
                     Settings
-                    <ExternalLink size={12} />
                 </button>
-            </div>
+            </header>
 
-            <div className="flex-1 p-4 overflow-y-auto">
-                <ErrorBoundary fallbackTitle="Dashboard failed to load">
+            <div className="popup-body">
+                <ErrorBoundary fallbackTitle="Failed to load usage">
                     <Dashboard />
                 </ErrorBoundary>
-            </div>
-
-            <div className="p-3 border-t border-gray-100 bg-gray-50 text-center">
-                <button
-                    type="button"
-                    onClick={openOptions}
-                    className="text-sm text-gray-600 hover:text-gray-900 font-medium"
-                >
-                    Open full settings &amp; export
-                </button>
             </div>
         </div>
     );

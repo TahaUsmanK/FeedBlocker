@@ -1,6 +1,7 @@
 import { msUntilMidnight } from '../lib/dates';
 import { StorageService } from '../storage';
 import { flushPendingUsage } from './pendingUsage';
+import { updateBadge } from './badge';
 
 export const MIDNIGHT_ALARM = 'focus-midnight-rollover';
 export const FLUSH_ALARM = 'focus-flush-usage';
@@ -58,6 +59,7 @@ export async function handleAlarm(name: string): Promise<void> {
 
     if (name === FLUSH_ALARM) {
         await flushPendingUsage();
+        await updateBadge();
         return;
     }
 

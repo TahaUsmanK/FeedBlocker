@@ -4,6 +4,7 @@ import { HelperData, Platform, TRACKED_PLATFORMS } from '../types';
 import { handleAlarm, setupAlarms } from './alarms';
 import { addPendingSeconds, flushPendingUsage, recoverPending } from './pendingUsage';
 import { setupNavigationGuard } from './navigation';
+import { updateBadge } from './badge';
 
 /**
  * Runs on every service-worker wake (install, startup, alarm, message, navigation).
@@ -15,6 +16,7 @@ async function onWorkerStart() {
     await StorageService.migrateLegacyUsageIfNeeded();
     await StorageService.rolloverDayIfNeeded();
     await setupAlarms();
+    await updateBadge();
 }
 
 /**
@@ -27,8 +29,11 @@ async function onWorkerStart() {
  */
 void onWorkerStart();
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
     void onWorkerStart();
+    if (details.reason === 'install') {
+        void chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') });
+    }
 });
 
 chrome.runtime.onStartup.addListener(() => {

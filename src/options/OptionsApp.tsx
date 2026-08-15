@@ -1,7 +1,9 @@
-import { Download, RotateCcw } from 'lucide-react';
+import { useState } from 'react';
+import { Download } from 'lucide-react';
 import { SettingsForm } from '../components/SettingsForm';
 import { StorageService } from '../storage';
 import { Dashboard } from '../popup/Dashboard';
+import '../index.css';
 
 function downloadCsv(filename: string, content: string) {
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
@@ -13,64 +15,101 @@ function downloadCsv(filename: string, content: string) {
     URL.revokeObjectURL(url);
 }
 
+// Minimal SVG logo mark
+const LogoMark = ({ size = 22 }: { size?: number }) => (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" className="options-logo-mark">
+        <circle cx="16" cy="16" r="13" stroke="currentColor" strokeWidth="2.5" />
+        <path d="M16 16 L16 3 A13 13 0 0 1 27.26 22.5 Z" fill="currentColor" opacity="0.85" />
+        <circle cx="16" cy="16" r="2" fill="currentColor" />
+    </svg>
+);
+
+type Tab = 'usage' | 'limits' | 'data';
+
 export const OptionsApp = () => {
+    const [tab, setTab] = useState<Tab>('usage');
+    const [resetConfirm, setResetConfirm] = useState(false);
+
     const exportCsv = async () => {
         const csv = await StorageService.exportUsageCsv();
-        downloadCsv(`focusoverlay-usage-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+        downloadCsv(`focusoverlay-${new Date().toISOString().slice(0, 10)}.csv`, csv);
     };
 
     const resetToday = async () => {
-        if (
-            !confirm(
-                "Reset today's usage stats? This cannot be undone. Limits and locks are not affected."
-            )
-        ) {
-            return;
-        }
+        if (!resetConfirm) { setResetConfirm(true); return; }
         await StorageService.resetTodayUsage();
+        setResetConfirm(false);
         window.location.reload();
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 text-gray-900">
-            <header className="bg-white border-b border-gray-200 px-6 py-5">
-                <h1 className="text-2xl font-bold">FocusOverlay</h1>
-                <p className="text-sm text-gray-500 mt-1">
-                    Track and limit time on YouTube, Instagram, and X.
-                </p>
+        <div className="options-root">
+            <header className="options-header">
+                <LogoMark />
+                <span className="options-title">FocusOverlay</span>
+                <span className="options-subtitle">All data is stored locally — nothing leaves your browser.</span>
             </header>
 
-            <main className="max-w-4xl mx-auto px-6 py-8 space-y-10">
-                <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                    <h2 className="text-lg font-bold mb-4">Today&apos;s usage</h2>
-                    <Dashboard />
-                </section>
+            <nav className="options-tabs" aria-label="Settings sections">
+                {(['usage', 'limits', 'data'] as Tab[]).map((t) => (
+                    <button
+                        key={t}
+                        type="button"
+                        role="tab"
+                        aria-selected={tab === t}
+                        className={`options-tab${tab === t ? ' active' : ''}`}
+                        onClick={() => setTab(t)}
+                    >
+                        {t.charAt(0).toUpperCase() + t.slice(1)}
+                    </button>
+                ))}
+            </nav>
 
-                <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                    <SettingsForm />
-                </section>
-
-                <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
-                    <h2 className="text-lg font-bold">Data</h2>
-                    <div className="flex flex-wrap gap-3">
-                        <button
-                            type="button"
-                            onClick={exportCsv}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 text-sm font-medium"
-                        >
-                            <Download size={16} />
-                            Export usage (CSV)
-                        </button>
-                        <button
-                            type="button"
-                            onClick={resetToday}
-                            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium"
-                        >
-                            <RotateCcw size={16} />
-                            Reset today&apos;s stats
-                        </button>
+            <main className="options-main" role="tabpanel" aria-label={tab}>
+                {tab === 'usage' && (
+                    <div className="options-card">
+                        <h2 className="options-card-title">Today&apos;s usage</h2>
+                        <Dashboard />
                     </div>
-                </section>
+                )}
+
+                {tab === 'limits' && (
+                    <div className="options-card">
+                        <SettingsForm />
+                    </div>
+                )}
+
+                {tab === 'data' && (
+                    <div className="options-card">
+                        <h2 className="options-card-title">Data</h2>
+                        <p className="field-hint" style={{ marginBottom: '16px' }}>
+                            Export your usage history as CSV, or reset today&apos;s stats.
+                            All data is local — no account required.
+                        </p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+                            <button type="button" onClick={exportCsv} className="btn-primary">
+                                <Download size={14} aria-hidden="true" />
+                                Export usage (CSV)
+                            </button>
+
+                            {!resetConfirm ? (
+                                <button type="button" onClick={resetToday} className="btn-ghost">
+                                    Reset today&apos;s stats
+                                </button>
+                            ) : (
+                                <div className="inline-confirm" role="group" aria-label="Confirm reset">
+                                    <span className="inline-confirm-msg">This cannot be undone.</span>
+                                    <button type="button" className="btn-danger" onClick={resetToday}>
+                                        Confirm reset
+                                    </button>
+                                    <button type="button" className="btn-ghost" onClick={() => setResetConfirm(false)}>
+                                        Cancel
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
             </main>
         </div>
     );

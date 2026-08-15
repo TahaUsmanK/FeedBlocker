@@ -1,15 +1,34 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Activity, Clock, BarChart3 } from 'lucide-react';
 import { StorageService } from '../storage';
 import { DailyUsage, TRACKED_PLATFORMS } from '../types';
 import { useStorageListener, isUsageOrSettingsKey } from '../hooks/useStorageListener';
+
+const PLATFORM_COLORS: Record<string, string> = {
+    youtube: '#ff0000',
+    instagram: '#e1306c',
+    twitter: '#1d9bf0',
+    tiktok: '#010101',
+    facebook: '#1877f2',
+    reddit: '#ff4500',
+    linkedin: '#0a66c2',
+    twitch: '#9146ff',
+    pinterest: '#e60023',
+};
+
+function formatTime(seconds: number): string {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m`;
+    return `${seconds}s`;
+}
 
 export const Dashboard = () => {
     const [usage, setUsage] = useState<DailyUsage | null>(null);
     const [weekly, setWeekly] = useState<DailyUsage[]>([]);
 
     const load = useCallback(async () => {
-        chrome.runtime.sendMessage({ type: 'FLUSH_USAGE' }).catch(() => {});
+        chrome.runtime.sendMessage({ type: 'FLUSH_USAGE' }).catch(() => { });
         const [data, wky] = await Promise.all([
             StorageService.getTodayUsage(),
             StorageService.getWeeklyStats(),
@@ -18,71 +37,74 @@ export const Dashboard = () => {
         setWeekly(wky);
     }, []);
 
-    useEffect(() => {
-        load();
-    }, [load]);
-
+    useEffect(() => { load(); }, [load]);
     useStorageListener(load, isUsageOrSettingsKey);
 
-    const formatTime = (seconds: number) => {
-        const h = Math.floor(seconds / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        return h > 0 ? `${h}h ${m}m` : `${m}m`;
-    };
+    if (!usage) return <div className="dash-loading" aria-busy="true">Loading…</div>;
 
-    if (!usage) return <div className="p-4 text-center text-gray-500">Loading…</div>;
+    // Only show platforms with usage > 0
+    const activePlatforms = TRACKED_PLATFORMS.filter((p) => (usage.byPlatform[p] || 0) > 0);
 
     const maxDaily = Math.max(...weekly.map((d) => d.total), 60);
 
     return (
-        <div className="space-y-4">
-            <div className="bg-blue-600 rounded-xl p-4 text-white">
-                <div className="flex items-center gap-2 mb-1 opacity-90">
-                    <Clock size={16} />
-                    <span className="text-xs font-semibold uppercase tracking-wider">Today</span>
-                </div>
-                <div className="text-3xl font-bold font-mono">{formatTime(usage.total)}</div>
+        <div className="dash-root">
+            {/* Total today */}
+            <div className="dash-hero">
+                <div className="dash-hero-label">Today</div>
+                <div className="dash-hero-value">{formatTime(usage.total)}</div>
             </div>
 
-            <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2 mb-3">
-                    <BarChart3 size={14} /> Last 7 days
-                </h3>
-                <div className="flex items-end justify-between h-20 gap-1">
-                    {weekly.map((day, i) => {
-                        const height = `${Math.max((day.total / maxDaily) * 100, 4)}%`;
-                        const isToday = i === 6;
+            {/* 7-day sparkline */}
+            <div className="dash-week" aria-label="Last 7 days usage">
+                {weekly.map((day, i) => {
+                    const pct = Math.max((day.total / maxDaily) * 100, 3);
+                    const isToday = i === 6;
+                    const dayLabel = new Date(day.date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short' });
+                    return (
+                        <div key={day.date} className="dash-week-col" title={`${dayLabel}: ${formatTime(day.total)}`}>
+                            <div
+                                className={`dash-week-bar${isToday ? ' is-today' : ''}`}
+                                style={{ height: `${pct}%` }}
+                                aria-label={`${dayLabel} ${formatTime(day.total)}`}
+                            />
+                            <span className="dash-week-label">{dayLabel.slice(0, 1)}</span>
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* Per-platform breakdown (only active platforms) */}
+            {activePlatforms.length > 0 ? (
+                <div className="dash-platforms">
+                    {activePlatforms.map((p) => {
+                        const seconds = usage.byPlatform[p] || 0;
+                        const pct = usage.total > 0 ? (seconds / usage.total) * 100 : 0;
                         return (
-                            <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
+                            <div key={p} className="dash-platform-row">
                                 <div
-                                    className={`w-full rounded-t ${isToday ? 'bg-blue-500' : 'bg-blue-200'}`}
-                                    style={{ height }}
+                                    className="dash-platform-dot"
+                                    style={{ background: PLATFORM_COLORS[p] ?? '#888' }}
+                                    aria-hidden="true"
                                 />
-                                <span className="text-[10px] text-gray-400 font-mono">
-                                    {day.date.split('-')[2]}
-                                </span>
+                                <span className="dash-platform-name">{p.charAt(0).toUpperCase() + p.slice(1)}</span>
+                                <div className="dash-platform-bar-wrap">
+                                    <div
+                                        className="dash-platform-bar"
+                                        style={{ width: `${pct}%`, background: PLATFORM_COLORS[p] ?? '#888' }}
+                                    />
+                                </div>
+                                <span className="dash-platform-time">{formatTime(seconds)}</span>
                             </div>
                         );
                     })}
                 </div>
-            </div>
-
-            <div className="space-y-2 max-h-48 overflow-y-auto">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2 sticky top-0 bg-white py-1">
-                    <Activity size={14} /> By site
-                </h3>
-                {TRACKED_PLATFORMS.map((p) => (
-                    <div
-                        key={p}
-                        className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg border border-gray-100"
-                    >
-                        <span className="capitalize text-sm text-gray-700">{p}</span>
-                        <span className="font-mono text-sm font-bold text-gray-900">
-                            {formatTime(usage.byPlatform[p] || 0)}
-                        </span>
-                    </div>
-                ))}
-            </div>
+            ) : (
+                <div className="dash-empty">
+                    <p>No usage tracked yet today.</p>
+                    <p className="dash-empty-sub">Browse a tracked site and come back.</p>
+                </div>
+            )}
         </div>
     );
 };

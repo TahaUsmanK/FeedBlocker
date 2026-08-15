@@ -36,10 +36,19 @@ function classifyYouTube(ctx: ContentContext): ClassifiedContent {
         const id = new URL(ctx.href).searchParams.get('v') || '';
         return { videoType: 'video', contentId: id, onTargetSurface: true };
     }
+    // Home feed, subscriptions, search — still trackable as general usage
+    if (pathIncludes(ctx.pathname, '/feed/', '/results', '/') && !pathIncludes(ctx.pathname, '/channel/', '/@')) {
+        return { videoType: 'unknown', contentId: ctx.pathname, onTargetSurface: true };
+    }
     return { videoType: 'unknown', contentId: '', onTargetSurface: false };
 }
 
 function classifyInstagram(ctx: ContentContext): ClassifiedContent {
+    // Explicitly non-consumption pages — DMs, account settings, etc.
+    const nonConsumption = ['/direct/', '/accounts/', '/settings/', '/explore/people/'];
+    if (nonConsumption.some((p) => ctx.pathname.startsWith(p))) {
+        return { videoType: 'unknown', contentId: '', onTargetSurface: false };
+    }
     if (pathIncludes(ctx.pathname, '/reels/')) {
         const id = ctx.pathname.split('/reels/')[1]?.split('/')[0] || '';
         return { videoType: 'short', contentId: id, onTargetSurface: true };
@@ -47,7 +56,11 @@ function classifyInstagram(ctx: ContentContext): ClassifiedContent {
     if (pathIncludes(ctx.pathname, '/stories/')) {
         return { videoType: 'short', contentId: ctx.pathname, onTargetSurface: true };
     }
-    return { videoType: 'video', contentId: ctx.pathname, onTargetSurface: true };
+    if (pathIncludes(ctx.pathname, '/p/', '/reel/')) {
+        return { videoType: 'video', contentId: ctx.pathname, onTargetSurface: true };
+    }
+    // Home feed / explore — consumption surface
+    return { videoType: 'unknown', contentId: ctx.pathname, onTargetSurface: true };
 }
 
 function classifyTikTok(ctx: ContentContext): ClassifiedContent {
@@ -64,17 +77,28 @@ function classifyFacebook(ctx: ContentContext): ClassifiedContent {
     if (pathIncludes(ctx.pathname, '/watch', '/videos/')) {
         return { videoType: 'video', contentId: ctx.pathname, onTargetSurface: true };
     }
-    return { videoType: 'video', contentId: '', onTargetSurface: true };
+    // Messages, settings, marketplace — not consumption
+    const nonConsumption = ['/messages/', '/privacy/', '/settings/', '/marketplace/manage/'];
+    if (nonConsumption.some((p) => ctx.pathname.startsWith(p))) {
+        return { videoType: 'unknown', contentId: '', onTargetSurface: false };
+    }
+    return { videoType: 'unknown', contentId: ctx.pathname, onTargetSurface: true };
 }
 
 function classifyReddit(ctx: ContentContext): ClassifiedContent {
+    // Content consumption surfaces
     if (
-        pathIncludes(ctx.pathname, '/comments/', '/video/', '/r/') &&
-        !pathIncludes(ctx.pathname, '/submit')
+        pathIncludes(ctx.pathname, '/r/', '/comments/', '/video/') &&
+        !pathIncludes(ctx.pathname, '/submit', '/new/', '/wiki/')
     ) {
         return { videoType: 'video', contentId: ctx.pathname, onTargetSurface: true };
     }
-    return { videoType: 'unknown', contentId: '', onTargetSurface: true };
+    // Home feed
+    if (ctx.pathname === '/' || pathIncludes(ctx.pathname, '/best', '/hot', '/new', '/rising')) {
+        return { videoType: 'unknown', contentId: ctx.pathname, onTargetSurface: true };
+    }
+    // Settings, user profile editing, etc. — not consumption
+    return { videoType: 'unknown', contentId: '', onTargetSurface: false };
 }
 
 function classifyGenericFeed(ctx: ContentContext): ClassifiedContent {
@@ -203,7 +227,7 @@ export const TRACKING_MODE_LABELS: Record<TrackingMode, string> = {
 export function shouldTrackByMode(
     mode: TrackingMode,
     content: ClassifiedContent,
-    pathname: string
+    _pathname: string
 ): boolean {
     switch (mode) {
         case 'all':
@@ -211,12 +235,10 @@ export function shouldTrackByMode(
         case 'shorts_only':
             return content.videoType === 'short' && content.onTargetSurface;
         case 'reels_only':
-            return (
-                (content.videoType === 'short' || pathIncludes(pathname, '/reel/')) &&
-                content.onTargetSurface
-            );
+            return content.videoType === 'short' && content.onTargetSurface;
         case 'video_only':
-            return content.onTargetSurface;
+            // Gate on actual video content being present, not just being on the page
+            return content.onTargetSurface && content.videoType !== 'unknown';
         default:
             return false;
     }

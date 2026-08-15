@@ -1,17 +1,30 @@
 import { ALL_TRACKED_HOSTS, hostToPlatform } from '../lib/platforms/registry';
 import { StorageService } from '../storage';
 import { setBlockState } from '../storage/blockState';
-
 import { Platform } from '../types';
 
-function blockTab(tabId: number, platform: Platform, until: number) {
-    void setBlockState({
+/**
+ * Build the blocked.html URL with block state encoded in query params.
+ * This is the reliable, race-free way to pass state to the blocked page
+ * because the URL params are available synchronously when the page loads,
+ * eliminating the storage-write vs page-load race condition.
+ */
+function buildBlockedUrl(platform: Platform, reason: string, until: number): string {
+    const base = chrome.runtime.getURL('blocked.html');
+    const params = new URLSearchParams({
         platform,
-        reason: 'cooldown',
-        until,
-        blockedAt: Date.now(),
+        reason,
+        until: String(until),
+        blockedAt: String(Date.now()),
     });
-    chrome.tabs.update(tabId, { url: chrome.runtime.getURL('blocked.html') });
+    return `${base}?${params.toString()}`;
+}
+
+function blockTab(tabId: number, platform: Platform, reason: 'daily' | 'session' | 'cooldown', until: number) {
+    // Write to session storage (for completeness / future use)
+    void setBlockState({ platform, reason, until, blockedAt: Date.now() });
+    // Navigate with state encoded in URL params (race-free)
+    chrome.tabs.update(tabId, { url: buildBlockedUrl(platform, reason, until) });
 }
 
 export function setupNavigationGuard() {
@@ -36,7 +49,7 @@ export function setupNavigationGuard() {
         await StorageService.clearExpiredCooldowns();
         const until = await StorageService.getCooldownUntil(platform);
         if (until > Date.now()) {
-            blockTab(details.tabId, platform, until);
+            blockTab(details.tabId, platform, 'cooldown', until);
         }
     });
 }

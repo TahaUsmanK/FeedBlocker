@@ -81,21 +81,28 @@ export async function enforceLimits(platform: Platform, sessionSeconds: number):
     await redirectToBlockPage(platform, state.reason, Math.max(until, cooldownUntil));
 }
 
-export function startLimitGuard(platform: Platform) {
+/**
+ * Starts the limit-guard tick for the given platform.
+ * Returns a cleanup function that stops the interval — must be called on
+ * extension context invalidation or page teardown to prevent BUG-11 (leaked
+ * intervals causing duplicate HEARTBEAT + double-counted usage).
+ */
+export function startLimitGuard(platform: Platform): () => void {
     void syncCache(platform);
 
-    chrome.storage.onChanged.addListener((changes, areaName) => {
+    const storageHandler = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
         if (areaName !== 'local') return;
         if (Object.keys(changes).some(isUsageOrSettingsKey) || Object.keys(changes).includes('cooldown')) {
             void syncCache(platform);
         }
-    });
+    };
+    chrome.storage.onChanged.addListener(storageHandler);
 
     const tick = async () => {
         const host = document.getElementById('focus-overlay-host');
         const isActive = host?.dataset.isActive === 'true';
         const sessionSeconds = parseInt(host?.dataset.sessionSeconds || '0', 10);
-        
+
         if (isActive && cachedSettings) {
             cachedUsage += 1;
         }
@@ -103,5 +110,11 @@ export function startLimitGuard(platform: Platform) {
         await enforceLimits(platform, sessionSeconds);
     };
 
-    return setInterval(tick, 1000);
+    const intervalId = window.setInterval(tick, 1000);
+
+    // Return cleanup so content/index.tsx can stop this on context invalidation
+    return () => {
+        clearInterval(intervalId);
+        chrome.storage.onChanged.removeListener(storageHandler);
+    };
 }
